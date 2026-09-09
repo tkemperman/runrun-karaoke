@@ -63,10 +63,10 @@
   microphone.style.cssText = "display:inline-block;width:19px;height:19px;flex-shrink:0;background-color:currentColor;mask-mode:alpha;mask-size:contain;mask-repeat:no-repeat;mask-position:center";
   microphone.style.maskImage = `url("${browser.runtime.getURL("src/microphone.png")}")`;
   inlineToggle.prepend(microphone);
-  const inlineSettings = button("", inlineRoot, () => { panel.hidden = false; });
+  const inlineSettings = button("", inlineRoot, () => { panel.hidden = !panel.hidden; });
   inlineSettings.className = "settings";
   inlineSettings.title = "Karaoke Settings";
-  inlineSettings.setAttribute("aria-label", "Open karaoke settings");
+  inlineSettings.setAttribute("aria-label", "Toggle karaoke settings");
   const gear = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   gear.setAttribute("viewBox", "0 0 24 24");
   gear.setAttribute("width", "24");

@@ -47,7 +47,7 @@ The downloaded page identifies the video as “FuwaMoco x Senchou Sing - Ahoy!�
 2. Choose **Load Temporary Add-on…** and select this repository's `manifest.json`.
 3. Open or reload a YouTube watch page.
 4. Press **Alt+K**, or click the microphone **Karaoke** button after the Transcript tools beside the channel information. If the Transcript extension is absent, the button appears at the end of the same owner row.
-5. Click the gear beside **Karaoke** to reopen the lyrics and timing editor at any time, including after closing it. Click the extension toolbar icon to open **Settings** directly. Change the activation shortcut, text size, or vertical position there. **Open lyrics editor for this video** opens the editor.
+5. Click the gear beside **Karaoke** to open the lyrics and timing editor; click it again to close the editor. Click the extension toolbar icon to open **Settings** directly. Change the activation shortcut, text size, or vertical position there. **Open lyrics editor for this video** opens the editor.
 
 New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. This preview uses Firefox Manifest V2 and requires no build step.
 
@@ -76,7 +76,7 @@ Automatic translation and general romaji-to-Japanese conversion are intentionall
 
 ## Display and timing
 
-The gear opens the editor. **Display & timing** controls the timing delay (positive means later), text size, distance above the video bottom, and **Show next line**. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
+The gear toggles the editor open or closed. The Close button also closes it. **Display & timing** controls the timing delay (positive means later), text size, distance above the video bottom, and **Show next line**. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
 
 ## Applying translations
 

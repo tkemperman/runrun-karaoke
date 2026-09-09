@@ -52,7 +52,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 3. Import LRC files and accept manually entered lyrics. Unsynchronized lyrics require timing edits before synchronized playback is possible.
 4. Accept pasted translations and assign them in order with Apply translation, allowing manual corrections. Display Japanese kanji/kana with English directly underneath, changing together as one block.
 5. Provide a readable overlay showing the active line and optionally the next line, with visibility, text size, vertical placement, and fullscreen controls. Center both languages inside the YouTube player.
-   - Toggle subtitles with a configurable shortcut, default `Alt+K`, or a microphone Karaoke button injected after `[data-yt-extension="transcript-copier"]` in `ytd-watch-metadata #owner`. Use the supplied microphone image as a 19×19 monochrome mask. Add an adjacent gear button that always opens the lyrics and timing settings. Fall back to the end of the owner row when Transcript tools are absent.
+   - Toggle subtitles with a configurable shortcut, default `Alt+K`, or a microphone Karaoke button injected after `[data-yt-extension="transcript-copier"]` in `ytd-watch-metadata #owner`. Use the supplied microphone image as a 19×19 monochrome mask. Add an adjacent gear button that toggles the lyrics and timing settings open or closed. Fall back to the end of the owner row when Transcript tools are absent.
    - The extension toolbar icon opens Settings directly. Do not add an intermediate on/off menu.
    - Keep button and shortcut state synchronized. New tabs start with karaoke off; activation is per tab.
 6. Provide an earlier/later timing offset saved per video.

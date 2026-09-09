@@ -14,7 +14,7 @@ This file tracks release status and planned scope. Planned features are not a re
 ### Implemented
 
 - Microphone Karaoke button after the Transcript tools, with owner-row fallback.
-- Adjacent gear button to reopen lyrics and timing settings at any time. Activation uses the microphone button or shortcut; the settings panel has no duplicate on/off button.
+- Adjacent gear button to toggle lyrics and timing settings open or closed; the Close button remains available. Activation uses the microphone button or shortcut; the settings panel has no duplicate on/off button.
 - Configurable Alt+K activation and Settings opened directly from the extension icon.
 - Bilingual overlay with adjustable size and vertical placement inside the player.
 - Aligned the “Show next line” checkbox beside its clickable label in display settings.
