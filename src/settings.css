@@ -1,0 +1,11 @@
+:root { color-scheme: dark; font: 15px/1.6 system-ui, sans-serif; background: #111b2b; color: #edf2ff; }
+body { margin: 0; padding: 24px; } main { max-width: 650px; margin: 24px auto; }
+h1 { font-size: 24px; } h2 { font-size: 20px; } p { color: #bbc8dc; }
+form { border-top: 1px solid #45536a; margin-top: 24px; padding-top: 20px; }
+label { display: block; margin: 12px 0 5px; }
+input, button { font: inherit; border: 1px solid #64748b; border-radius: 7px; padding: 8px 12px; background: #23334b; color: #fff; }
+button { cursor: pointer; margin: 6px 6px 6px 0; } button:hover { background: #354c6c; } button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+#status { color: #a5f3fc; } .popup { width: 270px; padding: 16px; } .popup h1 { font-size: 20px; } .popup button { display: block; width: 100%; }
+
+body { min-width: 380px; max-width: 720px; }

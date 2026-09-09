@@ -1,0 +1,56 @@
+{
+  "manifest_version": 2,
+  "name": "YouTube Karaoke",
+  "version": "1.0.0",
+  "description": "Editable bilingual karaoke lyrics for YouTube videos.",
+  "permissions": [
+    "storage",
+    "https://www.youtube.com/*",
+    "https://lrclib.net/*"
+  ],
+  "background": {
+    "scripts": [
+      "src/core.js",
+      "src/search.js",
+      "src/providers.js",
+      "src/background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/core.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_action": {
+    "default_title": "YouTube Karaoke Settings",
+    "default_popup": "src/settings.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "youtube-karaoke@local.test",
+      "strict_min_version": "115.0"
+    }
+  },
+  "options_ui": {
+    "page": "src/settings.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-karaoke": {
+      "suggested_key": {
+        "default": "Alt+K"
+      },
+      "description": "Turn karaoke on or off in the current YouTube tab"
+    }
+  },
+  "web_accessible_resources": [
+    "src/microphone.png"
+  ]
+}
