@@ -8,11 +8,11 @@ A Firefox add-on in development for synchronized lyrics on YouTube, with the ori
 
 ## Contact
 
-Thomas — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com)
+Thomas Kemperman — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com)
 
 ## License
 
-Licensed under the [MIT License](LICENSE). Copyright (c) 2026 Thomas.
+Licensed under the [MIT License](LICENSE). Copyright (c) 2026 Thomas Kemperman.
 Lyrics and translations obtained from external sources are not covered by this project's license.
 
 ## Project status
