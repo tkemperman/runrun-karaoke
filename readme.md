@@ -6,6 +6,10 @@
 
 A Firefox add-on in development for synchronized lyrics on YouTube, with the original text above its translation. Designed to support Japanese kanji and kana, live performances, and editable timing for each video.
 
+## Contact
+
+Thomas — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com)
+
 ## License
 
 Licensed under the [MIT License](LICENSE). Copyright (c) 2026 Thomas.
