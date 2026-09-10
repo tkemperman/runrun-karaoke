@@ -1,8 +1,10 @@
-# Mascot v2
+# README mascot
 
-Created using the built-in image generation tool from `mascot-original.png`. Existing assets are preserved. Saved as `mascot-v2.png`.
+The README uses `assets/mascot.png`. The built-in image generation tool removed the baked-in checkerboard on September 10, 2026. The output was visually inspected and its PNG alpha channel verified to contain fully transparent background pixels.
 
-The curl has been removed. The generated background is an opaque checkerboard, despite requests for transparency, including two further attempts. This version is a preview and has not replaced the README image or extension icons.
+## Background extraction prompt
+
+Use case: background-extraction. Edit target: supplied README mascot. Remove the baked-in gray and white checkerboard from the exterior background and replace it with actual transparent PNG alpha (zero alpha outside subject). Preserve the exact turquoise cat, pose, smooth head, face, cream muzzle, navy outlines, white speech bubble and music note, colors and composition. Keep white inside the speech bubble opaque. No checkerboard drawing, no solid background, no shadow. Output a genuinely transparent cutout.
 
 ## Prompt
 
