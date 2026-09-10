@@ -1,11 +1,12 @@
 {
-  "name": "youtube-karaoke",
+  "name": "runrun-karaoke",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Firefox add-on for editable bilingual YouTube karaoke",
   "scripts": {
     "test": "node --test --test-isolation=none --test-reporter=spec tests/*.test.js",
-    "check": "node --check src/core.js && node --check src/search.js && node --check src/providers.js && node --check src/background.js && node --check src/content.js && node --check src/settings.js",
+    "check": "node --check src/core.js && node --check src/search.js && node --check src/providers.js && node --check src/translation.js && node --check src/background.js && node --check src/content.js && node --check src/settings.js",
     "package": "python3 scripts/package.py"
   }
 }

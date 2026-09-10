@@ -67,3 +67,14 @@ test('live stamping closes the preceding line and permits retiming', () => {
   assert.throws(() => C.stamp(rows, 2, 15), /valid/);
   C.stamp(rows, 0, 20); assert.equal(rows[0].end, null);
 });
+
+test('offset aligns lyrics with the exact video start and end', () => {
+  const rows = [C.block('First', 15.27, 21.82), C.block('Next', 21.82, 25)];
+  const delay = 33 - rows[0].start;
+  assert.equal(C.activeBlock(rows, 32.999, delay), null);
+  assert.equal(C.activeBlock(rows, 33, delay), rows[0]);
+  assert.equal(C.activeBlock(rows, 36.64, delay), rows[0]);
+  assert.equal(C.activeBlock(rows, 21.82 + delay, delay), rows[1]);
+  assert.equal(C.activeBlock(rows, 25 + delay, delay), null);
+  assert.equal(C.activeBlock(rows, 5, 5 - rows[0].start), rows[0]);
+});

@@ -1,18 +1,28 @@
 {
   "manifest_version": 2,
-  "name": "YouTube Karaoke",
+  "name": "ルンルンKARAOKE",
   "version": "1.0.0",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
+  "icons": {
+    "16": "src/mascot-icon-transparent-16.png",
+    "32": "src/mascot-icon-transparent-32.png",
+    "48": "src/mascot-icon-transparent-48.png",
+    "64": "src/mascot-icon-transparent-64.png",
+    "96": "src/mascot-icon-transparent-96.png",
+    "128": "src/mascot-icon-transparent-128.png"
+  },
   "permissions": [
     "storage",
     "https://www.youtube.com/*",
-    "https://lrclib.net/*"
+    "https://lrclib.net/*",
+    "https://api.openai.com/*"
   ],
   "background": {
     "scripts": [
       "src/core.js",
       "src/search.js",
       "src/providers.js",
+      "src/translation.js",
       "src/background.js"
     ]
   },
@@ -29,13 +39,21 @@
     }
   ],
   "browser_action": {
-    "default_title": "YouTube Karaoke Settings",
+    "default_icon": {
+      "16": "src/mascot-icon-transparent-16.png",
+      "32": "src/mascot-icon-transparent-32.png",
+      "48": "src/mascot-icon-transparent-48.png"
+    },
+    "default_title": "ルンルンKARAOKE Settings",
     "default_popup": "src/settings.html"
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "youtube-karaoke@local.test",
-      "strict_min_version": "115.0"
+      "id": "runrun-karaoke@silverwoodslabs",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["searchTerms", "websiteContent", "authenticationInfo"]
+      }
     }
   },
   "options_ui": {

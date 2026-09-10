@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const C = require('../src/core.js');
 
-function harness() {
+function harness(translation = {}) {
   const saved = {}; const sent = []; let listener, command;
   const browser = {
     runtime: { onMessage: { addListener(fn) { listener = fn; } } },
@@ -15,7 +15,7 @@ function harness() {
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProviders: new Map()});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProviders: new Map(), KaraokeTranslation: translation});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {
@@ -41,4 +41,29 @@ test('manifest assets exist and activation defaults to Alt+K with settings direc
   assert.equal(m.commands['toggle-karaoke'].suggested_key.default, 'Alt+K');
   assert.equal(m.browser_action.default_popup, 'src/settings.html');
   for (const path of [...m.background.scripts, ...m.content_scripts.flatMap(c => c.js), m.browser_action.default_popup, m.options_ui.page]) assert.ok(fs.existsSync(path), path);
+});
+for (const model of ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"]) test(`${model} preferences and key persist separately from projects and key is never returned`, async () => {
+  const h = harness();
+  const settings = { type: 'save-translation-settings', model, language: 'nl', apiKey: 'private-key' };
+  assert.equal((await h.request(settings)).data.hasApiKey, true);
+  const loaded = (await h.request({ type: 'translation-settings' })).data;
+  assert.equal(loaded.model, model); assert.equal(loaded.language, 'nl');
+  assert.equal(loaded.hasApiKey, true); assert.equal(loaded.apiKey, undefined);
+  await h.request({ type: 'save-translation-settings', model: 'gpt-6-astra', language: 'en' });
+  assert.equal(h.saved.translationSettings.apiKey, 'private-key');
+  const project = C.project('h3chCOV_phw');
+  await h.request({ type: 'save', project });
+  assert.ok(!JSON.stringify((await h.request({ type: 'load', videoId: project.videoId })).data).includes('private-key'));
+  await h.request({ ...settings, apiKey: '' });
+  assert.equal((await h.request({ type: 'translation-settings' })).data.hasApiKey, false);
+});
+
+test('translation uses the saved key in the background without trusting a supplied key', async () => {
+  let received;
+  const h = harness({ translate: async args => { received = args; return [{ id: 'a', translation: 'Hallo' }]; } });
+  await h.request({ type: 'save-translation-settings', model: 'gpt-6-astra', language: 'nl', apiKey: 'saved-key' });
+  const result = await h.request({ type: 'translate', apiKey: 'wrong-key', model: 'gpt-6-astra', language: 'nl', lines: [{ id: 'a', text: 'Hello' }] });
+  assert.equal(received.apiKey, 'saved-key');
+  assert.equal(result.data[0].translation, 'Hallo');
+  assert.ok(!JSON.stringify(result).includes('saved-key'));
 });

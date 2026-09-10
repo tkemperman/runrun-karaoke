@@ -15,6 +15,25 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         data = true;
         break;
       }
+      case "translation-settings": {
+        const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
+        data = { provider: "openai", model: saved.model || "gpt-6-astra", language: saved.language || "en", hasApiKey: !!saved.apiKey };
+        break;
+      }
+      case "save-translation-settings": {
+        const { model, language, apiKey } = message;
+        if (!["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"].includes(model) || typeof language !== "string" || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)) throw new Error("Invalid translation preferences.");
+        if (apiKey !== undefined && (typeof apiKey !== "string" || apiKey.length > 1000)) throw new Error("Invalid API key.");
+        const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
+        await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
+        data = { hasApiKey: apiKey === undefined ? !!saved.apiKey : !!apiKey.trim() };
+        break;
+      }
+      case "translate": {
+        const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
+        data = await KaraokeTranslation.translate({ ...message, apiKey: saved.apiKey });
+        break;
+      }
       case "search":
         if (typeof message.query !== "string" || !message.query.trim() || message.query.length > 500) throw new Error("Enter a shorter song or artist search.");
         data = await KaraokeProviders.get("lrclib").search(message.query);

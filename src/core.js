@@ -54,12 +54,11 @@
     return entries.map((row, i) => ({ ...row, end: entries.slice(i + 1).find(next => next.start > row.start)?.start ?? null }));
   }
   function activeBlock(rows, videoTime, offset = 0) {
-    const time = videoTime - offset;
     let active = null;
     for (const row of rows) {
-      if (row.start !== null && row.start <= time && (!active || row.start >= active.start)) active = row;
+      if (row.start !== null && row.start + offset <= videoTime && (!active || row.start >= active.start)) active = row;
     }
-    if (!active || (active.end !== null && time >= active.end) || !active.text.trim()) return null;
+    if (!active || (active.end !== null && videoTime >= active.end + offset) || !active.text.trim()) return null;
     return active;
   }
   function stamp(rows, index, time) {

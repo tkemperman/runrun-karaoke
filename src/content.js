@@ -4,7 +4,7 @@
   const C = KaraokeCore;
   const host = document.createElement("div");
   host.id = "youtube-karaoke-host";
-  const root = host.attachShadow({ mode: "open" });
+  const root = host.attachShadow({ mode: "closed" });
   const style = document.createElement("style");
   style.textContent = `
     :host { all: initial; font: 14px/1.45 system-ui, sans-serif; color: #eef2ff; }
@@ -12,10 +12,14 @@
     button, input, textarea, select { font: inherit; }
     button { cursor: pointer; border: 1px solid #526078; border-radius: 7px; padding: 7px 11px; background: #28354b; color: #fff; }
     button:hover { background: #3c4d69; } button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    button:disabled { cursor: wait; opacity: .65; }
+    button[aria-busy=true]::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: 8px; vertical-align: -.15em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: translation-spin .75s linear infinite; }
+    @keyframes translation-spin { to { transform: rotate(360deg); } }
     input, textarea, select { border: 1px solid #526078; border-radius: 5px; padding: 7px; background: #121c2b; color: #fff; min-width: 0; }
     textarea { width: 100%; min-height: 65px; resize: vertical; } input[type=number] { width: 90px; }
     label { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; } a { color: #82e5f0; }
     label.checkbox-row { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+    .sync-row { margin: 8px 0; } .sync-row input { width: 100px; }
     .checkbox-row input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #67e8f9; cursor: pointer; }
     #panel { position: fixed; right: 16px; top: 70px; width: min(550px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow: auto; z-index: 2147483647; background: #182235; border: 1px solid #526078; border-radius: 12px; padding: 16px; box-shadow: 0 12px 40px #0009; }
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
@@ -86,8 +90,8 @@
       if (transcript.nextElementSibling !== inlineHost) transcript.after(inlineHost);
     } else if (inlineHost.parentNode !== owner) owner.append(inlineHost);
   }
-  const panel = el("section", null, root, { id: "panel", "aria-label": "YouTube Karaoke editor" }); panel.hidden = true;
-  const header = el("header", null, panel); el("h2", "YouTube Karaoke", header);
+  const panel = el("section", null, root, { id: "panel", "aria-label": "ルンルンKARAOKE editor" }); panel.hidden = true;
+  const header = el("header", null, panel); el("h2", "ルンルンKARAOKE", header);
   button("Close", header, () => { panel.hidden = true; });
   const title = el("p", "Open a YouTube video to begin.", panel, { class: "muted" });
   const status = el("p", "", panel, { id: "status", role: "status" });
@@ -102,6 +106,7 @@
   }
   function save() {
     if (!project) return;
+    updateTimingFields();
     let snapshot;
     try { snapshot = C.validate(project); } catch (error) { fail(error); return; }
     const currentGeneration = generation;
@@ -119,7 +124,54 @@
   const controls = el("div", null, display, { class: "row" });
   function setEnabled(value) { enabled = value; inlineToggle.setAttribute("aria-pressed", String(enabled)); if (enabled && !project?.blocks.length) panel.hidden = false; return { enabled }; }
   const offset = input("Delay in seconds (+ later / − earlier)", display, "0", "number"); offset.step = "0.1";
-  offset.addEventListener("change", () => { if (project) { project.offset = Number(offset.value); save(); } });
+  offset.addEventListener("change", () => { if (project) { project.offset = Number(offset.value); renderRows(); save(); } });
+  el("label", "Start at", display, { for: "lyrics-start-at" });
+  const syncRow = el("div", null, display, { class: "row sync-row" });
+  const startAt = el("input", null, syncRow, { id: "lyrics-start-at", type: "text" });
+  el("span", "or", syncRow);
+  startAt.placeholder = "0:33";
+  startAt.addEventListener("change", () => {
+    try {
+      requireProject();
+      const first = firstTimedLyric();
+      if (!first) throw new Error("Set a start time for the first lyric line first.");
+      const match = startAt.value.trim().match(/^(-?)(\d+):([0-5]\d)(?:\.(\d{1,3}))?$/);
+      if (!match) throw new Error("Use minutes:seconds for Start at, for example 0:33 or 1:05.5.");
+      const seconds = (Number(match[2]) * 60 + Number(match[3]) + Number(`0.${match[4] || 0}`)) * (match[1] ? -1 : 1);
+      const delay = seconds - first.start;
+      if (Math.abs(delay) > 86400) throw new Error("Invalid timing offset.");
+      project.offset = delay;
+      renderRows();
+      save();
+    } catch (error) { updateTimingFields(); fail(error); }
+  });
+  function firstTimedLyric() {
+    return project?.blocks.filter(row => row.start !== null && row.text.trim()).reduce((first, row) => !first || row.start < first.start ? row : first, null);
+  }
+  function updateTimingFields() {
+    offset.value = project?.offset || 0;
+    const first = firstTimedLyric();
+    startAt.disabled = !first;
+    if (!first) { startAt.value = ""; return; }
+    const milliseconds = Math.round((first.start + project.offset) * 1000);
+    const absolute = Math.abs(milliseconds);
+    const seconds = String(Math.floor(absolute / 1000) % 60).padStart(2, "0");
+    const fraction = String(absolute % 1000).padStart(3, "0").replace(/0+$/, "");
+    startAt.value = `${milliseconds < 0 ? "-" : ""}${Math.floor(absolute / 60000)}:${seconds}${fraction ? `.${fraction}` : ""}`;
+  }
+  button("Sync with video position", syncRow, () => {
+    requireProject();
+    const row = project.blocks[selected];
+    if (!row) throw new Error("Select a line in the Line editor first.");
+    if (row.start === null) throw new Error("Set a start time for the selected line first.");
+    const media = video();
+    if (!media || document.querySelector("#movie_player.ad-showing")) throw new Error("Wait for the main video (not an advertisement).");
+    project.offset = Math.round(media.currentTime) - row.start;
+    offset.value = project.offset;
+    renderRows();
+    save();
+  }).title = "Sync selected line to current video position";
+  el("p", "Select a timed line in the Line editor, then click Sync as that line begins in the video. This adjusts the delay for all lyrics while preserving their relative timing.", display, { class: "muted" });
   const fontSize = input("Text size", display, "30", "range"); fontSize.min = "18"; fontSize.max = "60";
   const position = input("Distance above bottom of video (%)", display, "13", "range"); position.min = "5"; position.max = "60";
   browser.storage.local.get("displaySettings").then(({ displaySettings: settings }) => {
@@ -135,6 +187,24 @@
   });
   const searchSection = section("Find lyrics · LRCLIB");
   const query = input("Song or artist", searchSection);
+  let queryDirty = false;
+  let queryReady = false;
+  query.addEventListener("input", () => {
+    if (!videoId) return;
+    queryDirty = true;
+    browser.storage.local.set({ [`lyricsSearch:${videoId}`]: { query: query.value } }).catch(fail);
+  });
+  function updateVideoTitle() {
+    if (!videoId) return;
+    // YouTube updates its URL before the watch page metadata finishes loading.
+    const watch = document.querySelector("ytd-watch-flexy");
+    if (watch?.getAttribute("video-id") !== videoId) return;
+    const currentTitle = watch.querySelector("ytd-watch-metadata h1")?.textContent?.trim();
+    if (currentTitle) {
+      title.textContent = currentTitle;
+      if (queryReady && !queryDirty) query.value = currentTitle;
+    }
+  }
   button("Search", searchSection, async () => {
     requireProject(); const currentGeneration = generation; notify("Searching LRCLIB…");
     const found = await request({ type: "search", query: query.value });
@@ -181,6 +251,93 @@
   button("Cancel", translationWarning, () => { translationWarning.hidden = true; });
   translationDraft.addEventListener("input", () => { translationWarning.hidden = true; });
   el("p", "Apply matches lines in order, skipping blank lines. Different line counts show a warning with an Apply anyway option. Review the result in Line editor. Pasted text is temporary until applied.", translationSection, { class: "muted" });
+  const automatic = section("Automatic translation");
+  const provider = el("select", null, el("label", "Provider", automatic));
+  el("option", "OpenAI", provider, { value: "openai" });
+  const apiKey = input("OpenAI API key", automatic, "", "password");
+  apiKey.autocomplete = "off";
+  const model = el("select", null, el("label", "Model", automatic));
+  el("option", "GPT-6 Astra", model, { value: "gpt-6-astra" });
+  el("option", "GPT-5.6 Sol", model, { value: "gpt-5.6-sol" });
+  el("option", "GPT-5.6 Terra", model, { value: "gpt-5.6-terra" });
+  el("option", "GPT-5.6 Luna", model, { value: "gpt-5.6-luna" });
+  el("option", "GPT-5.5", model, { value: "gpt-5.5" });
+  el("option", "GPT-5", model, { value: "gpt-5" });
+  el("option", "GPT-4.1", model, { value: "gpt-4.1" });
+  el("option", "GPT-4o", model, { value: "gpt-4o" });
+  el("option", "GPT-4o mini", model, { value: "gpt-4o-mini" });
+  const targetLanguage = input("Translation language code (e.g. en, nl, ja)", automatic, "en");
+  let hasApiKey = false, preferredLanguage = "en";
+  let preferenceQueue = Promise.resolve();
+  function persistPreferences(key) {
+    const message = { type: "save-translation-settings", model: model.value, language: targetLanguage.value.trim() };
+    if (key !== undefined) message.apiKey = key;
+    preferenceQueue = preferenceQueue.catch(() => {}).then(() => request(message));
+    return preferenceQueue.then(saved => {
+      hasApiKey = saved.hasApiKey;
+      apiKey.placeholder = hasApiKey ? "API key saved — enter a new key to replace it" : "Enter your OpenAI API key";
+      preferredLanguage = message.language;
+    });
+  }
+  const preferencesReady = request({ type: "translation-settings" }).then(saved => {
+    model.value = saved.model; preferredLanguage = saved.language; hasApiKey = saved.hasApiKey;
+    apiKey.placeholder = hasApiKey ? "API key saved — enter a new key to replace it" : "Enter your OpenAI API key";
+    if (project) { project.translationLanguage = preferredLanguage; renderRows(); }
+    targetLanguage.value = preferredLanguage;
+  });
+  preferencesReady.catch(fail);
+  apiKey.addEventListener("change", () => {
+    if (apiKey.value.trim()) persistPreferences(apiKey.value).then(() => { apiKey.value = ""; }).catch(fail);
+  });
+  model.addEventListener("change", () => { persistPreferences().catch(fail); });
+  button("Remove saved API key", automatic, async () => { await persistPreferences(""); apiKey.value = ""; });
+  targetLanguage.addEventListener("change", () => {
+    if (!project) return;
+    if (!/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(targetLanguage.value.trim())) {
+      targetLanguage.value = project.translationLanguage;
+      fail(new Error("Enter a language code such as en, nl or pt-BR.")); return;
+    }
+    project.translationLanguage = targetLanguage.value.trim(); renderRows(); save(); persistPreferences().catch(fail);
+  });
+  el("p", "Translate all lines sends the original lyrics to OpenAI using the selected language. API usage is billed by OpenAI. Your key and preferences are saved locally in this extension. The key is excluded from project exports.", automatic, { class: "muted" });
+  const automaticStatus = el("p", "", automatic, { role: "status" });
+  const translateButton = button("Translate all lines", automatic, async () => {
+    if (translateButton.disabled) return;
+    requireProject();
+    const requestedProject = project, requestedGeneration = generation;
+    translateButton.disabled = true;
+    translateButton.setAttribute("aria-busy", "true");
+    translateButton.textContent = "Translating…";
+    automaticStatus.textContent = "Translating all lines…";
+    try {
+      await preferencesReady;
+      await persistPreferences(apiKey.value.trim() || undefined);
+      apiKey.value = "";
+      if (project !== requestedProject || generation !== requestedGeneration) return;
+      if (!hasApiKey) throw new Error("Enter your OpenAI API key.");
+      if (!project.blocks.some(row => row.text.trim())) throw new Error("Add original lyrics in Line editor first.");
+      const originalProject = project, currentGeneration = generation, language = project.translationLanguage;
+      const snapshot = () => JSON.stringify(project.blocks.map(row => [row.id, row.text, row.translations[language] || ""]));
+      const before = snapshot();
+      const translations = await request({ type: "translate", model: model.value, language,
+        lines: project.blocks.map(row => ({ id: row.id, text: row.text })) });
+      if (generation !== currentGeneration || project !== originalProject) return;
+      if (project.translationLanguage !== language || snapshot() !== before) throw new Error("Lyrics or translations changed during the request. Result discarded; translate again to use your latest edits.");
+      if (project.blocks.some(row => row.translations[language]?.trim()) && !window.confirm("Replace existing translations with the automatic translation?")) {
+        automaticStatus.textContent = "Translation discarded. Existing translations kept."; return;
+      }
+      const byId = new Map(translations.map(row => [row.id, row.translation]));
+      for (const row of project.blocks) row.translations[language] = byId.get(row.id);
+      renderRows(); editor.open = true; save();
+      automaticStatus.textContent = `Translated ${translations.length} lines. Review them in Line editor.`;
+    } catch (error) {
+      if (generation === requestedGeneration) automaticStatus.textContent = error.message;
+    } finally {
+      translateButton.disabled = false;
+      translateButton.removeAttribute("aria-busy");
+      translateButton.textContent = "Translate all lines";
+    }
+  });
   const manual = section("Paste lyrics & import / export");
   const originalDraft = input("Original lyrics (one block per line), or timed LRC", manual, "", "textarea");
   button("Use pasted lyrics", manual, () => {
@@ -211,15 +368,9 @@
     const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = el("a", null, root, { href: url, download: `karaoke-${videoId}.json` }); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  button("Load original demo (not song lyrics)", manual, () => {
-    requireProject(); if (!replaceAllowed()) return;
-    project.blocks = [C.block("こんにちは、音楽の時間です。", 0, 5), C.block("次の行を一緒に試しましょう。", 5, 10), C.block("ここからまた始めましょう。", 12, 17)];
-    ["Hello, it is time for music.", "Let us try the next line together.", "Let us start again from here."].forEach((text, i) => { project.blocks[i].translations.en = text; });
-    project.offset = 0; selected = 0; refresh(); save();
-  });
   function replaceAllowed() { return !project.blocks.length || window.confirm("Replace the current lyrics and timing? Export your project first if you want to keep a copy."); }
   const editor = section("Line editor"); editor.open = true;
-  el("p", "Select a line, then mark it as the vocals begin. Alt+Shift+M marks the next line while this editor is open (outside text fields). Times are seconds. Blank end times last until the next timed line.", editor, { class: "muted" });
+  el("p", "Select a line, then mark it as the vocals begin. Alt+Shift+M marks the next line while this editor is open (outside text fields). Times are video seconds, including the delay. Blank end times last until the next timed line.", editor, { class: "muted" });
   const clock = el("p", "", editor);
   const stampButton = button("Mark selected line now", editor, mark);
   button("End previous line now", editor, () => {
@@ -234,8 +385,10 @@
     for (const source of project?.sources || []) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
   }
   function refresh() {
-    offset.value = project?.offset || 0;
-    title.textContent = project ? `${project.title || "Untitled video"} · ${project.videoId}` : "Open a YouTube watch page to begin.";
+    updateTimingFields();
+    targetLanguage.value = project?.translationLanguage || "en";
+    title.textContent = videoId ? "Loading video title…" : "Open a YouTube watch page to begin.";
+    updateVideoTitle();
     renderRows(); renderSources();
   }
   function renderRows() {
@@ -251,8 +404,11 @@
       button("Delete", actions, () => { if (!window.confirm(`Delete line ${index + 1}?`)) return; project.blocks.splice(index, 1); selected = Math.min(selected, project.blocks.length); renderRows(); save(); });
       const times = el("div", null, box, { class: "row" });
       for (const key of ["start", "end"]) {
-        const field = input(key === "start" ? "Start (s)" : "End (s)", times, row[key] ?? "", "number"); field.step = "0.01"; field.min = "0";
-        field.addEventListener("change", () => { row[key] = field.value === "" ? null : Number(field.value); save(); });
+        const field = input(key === "start" ? "Start (s)" : "End (s)", times, row[key] === null ? "" : Number((row[key] + project.offset).toFixed(3)), "number"); field.step = "0.001";
+        field.addEventListener("change", () => { const previous = row[key];
+          row[key] = field.value === "" ? null : Number((Number(field.value) - project.offset).toFixed(3));
+          try { C.validate(project); save(); }
+          catch (error) { row[key] = previous; renderRows(); fail(error); } });
       }
       const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; save(); });
       const translation = input(`Translation (${project.translationLanguage})`, box, row.translations[project.translationLanguage] || "", "textarea");
@@ -293,18 +449,34 @@
     if (container && host.parentNode !== container) container.append(host);
     const currentId = location.pathname === "/watch" ? new URL(location.href).searchParams.get("v") : null;
     if (currentId !== videoId) {
-      videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); translationDraft.value = ""; translationWarning.hidden = true; originalDraft.value = ""; generation++;
+      videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); translationDraft.value = ""; translationWarning.hidden = true; originalDraft.value = ""; automaticStatus.textContent = ""; generation++;
+      query.value = ""; queryDirty = false; queryReady = false;
       const token = generation; refresh(); notify("");
       if (videoId && /^[\w-]{11}$/.test(videoId)) {
         const requestedId = videoId;
+        const searchKey = `lyricsSearch:${requestedId}`;
+        browser.storage.local.get(searchKey).then(saved => {
+          if (token !== generation) return;
+          if (!queryDirty && typeof saved[searchKey]?.query === "string") {
+            query.value = saved[searchKey].query;
+            queryDirty = true;
+          }
+          queryReady = true;
+          updateVideoTitle();
+        }).catch(error => {
+          if (token !== generation) return;
+          queryReady = true;
+          fail(error);
+        });
         request({ type: "load", videoId }).then(saved => {
           if (token !== generation) return;
           project = saved ? C.validate(saved) : C.project(requestedId, document.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || document.title.replace(/ - YouTube$/, ""));
-          query.value = project.artist ? `${project.artist} ${project.title}` : project.title;
-          refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics, paste your own, or load the demo to test the overlay.");
+          project.translationLanguage = preferredLanguage;
+          refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics or paste your own.");
         }).catch(fail);
       }
     }
+    updateVideoTitle();
     
     const active = project && media ? C.activeBlock(project.blocks, media.currentTime, project.offset) : null;
     overlay.hidden = !enabled || !active || !currentId || player?.classList.contains("ad-showing");

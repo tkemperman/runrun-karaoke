@@ -1,12 +1,14 @@
-# YouTube Karaoke — Development Plan
+# ルンルンKARAOKE — Development Plan
 
 ## Project language
 
 Use English for source code comments, identifiers, documentation, commit messages, and default interface text. Preserve lyrics, translations, artist names, and song titles in their original languages. The add-on is intended for public distribution.
 
+Keep the user-facing brand exactly `ルンルンKARAOKE`; technical package names may retain `runrun-karaoke`.
+
 ## Current scope decision
 
-Automatic translation and translation fetching are excluded. Keep manual translation entry and JSON import/export. Do not reintroduce MyJpop fetching. Apply translation assigns pasted non-empty lines in order, without semantic matching. Different line counts require an explicit Apply anyway choice; unmatched originals stay unchanged and extra translations are ignored. Confirm replacement of existing translations. Artist alias lookup uses explicit spellings and does not translate text.
+Support optional OpenAI automatic translation below Manual translation, with persistent local API key, provider, model, and target language preferences. Use strict JSON output mapped by block ID; preserve existing work on invalid or stale responses and confirm replacement. Keep manual translation entry and JSON import/export. Do not reintroduce MyJpop fetching. Apply translation assigns pasted non-empty lines in order, without semantic matching. Different line counts require an explicit Apply anyway choice; unmatched originals stay unchanged and extra translations are ignored. Confirm replacement of existing translations. Artist alias lookup uses explicit spellings and does not translate text.
 
 ## Objective
 
@@ -24,11 +26,13 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 
 - A content script manages the overlay and follows the YouTube player's playback position.
 - A background component handles external source requests and local storage. Request only necessary extension permissions and access to source hosts in use.
+- Keep Firefox's `data_collection_permissions` declaration aligned with outgoing data: LRCLIB search terms, website content used in search/translation, and the OpenAI authentication key. The current manifest declares these as required installation consent; network features remain user-triggered. Require Firefox 140 or newer for built-in consent unless an older-version consent flow is implemented.
 - Separate rendering, player integration, source providers, translation mapping, and timing editing.
 - Use the player's current playback position as the clock to avoid accumulated drift when pausing, seeking, or changing playback speed.
 - Store customized performances by YouTube video ID. Keep retrieved source data separate from user corrections so refreshing a source does not overwrite edits.
 - Each text block has a stable ID, start and end times in seconds, original text, and translations keyed by language. Repeated lines have separate blocks.
 - Project metadata includes video ID, title, artist, original language, selected translation language, sources, and a global timing offset.
+- Stored block times exclude the global offset. Overlay selection and Line editor display use video time (`block time + offset`); convert edited video times back to stored times. Apply the offset exactly once and test exact start/end boundaries.
 - Version the storage and export schema and provide migrations when it changes.
 - Support empty intervals for instrumental passages and additional blocks for live interludes.
 
@@ -36,6 +40,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 
 - LRCLIB is the primary lyrics provider for version 1.0.0. Use synchronized lyrics when available; do not assume complete catalog coverage.
 - Search explicit artist aliases and extracted song titles; keep manual recording selection and query correction available.
+- Track search edits per video: an untouched query follows that video's title, while a manually edited query is persisted under `lyricsSearch:<videoId>` and restored on reload or return. Reset in-memory search state on navigation and guard asynchronous restores against stale video results. Always show the current YouTube title in the editor header, without appending the video ID.
 - Keep source retrieval separate from rendering and timing logic. Request only permissions for sources in use.
 - Support manual lyrics pasting and LRC or project JSON import when sources are unavailable.
 - Accept pasted translations through Apply translation, then allow per-line corrections in Line editor. Preserve original text, timing, and other translation languages.
@@ -56,14 +61,18 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
    - The extension toolbar icon opens Settings directly. Do not add an intermediate on/off menu.
    - Keep button and shortcut state synchronized. New tabs start with karaoke off; activation is per tab.
 6. Provide an earlier/later timing offset saved per video.
+   - **Start at** shows the earliest timed, non-empty lyric's video start in minutes:seconds. Editing it calculates the global offset from the stored start.
+   - Place **Sync with video position** beside the Start at field, separated by **or** and vertically aligned with the input. Sync anchors the selected timed line to the current video position rounded to whole seconds. Preserve relative timing; do not round the calculated offset, which can require fractions.
+   - Refresh Line editor's displayed start/end video times after offset changes. Synchronization does not enable karaoke automatically.
 7. Build a timing editor: during playback, a key marks the start of the next line. Allow subsequent start/end edits and inserting, deleting, repeating, and moving blocks. Do not trigger shortcuts while typing in text fields.
 8. Allow lyrics and translation edits without re-entering timing.
 9. Save projects and corrections locally. Support JSON export/import preserving both languages and timing. Retain LRC import; LRC alone is insufficient for a complete bilingual project.
 10. Provide useful feedback for missing lyrics, missing translations, network failures, and invalid imports. Preserve existing work when errors occur.
+11. Keep automatic translation optional. Immediately disable **Translate all lines** and show a spinner while a request runs; prevent duplicate submissions and restore the button on completion or failure. Discard results if the video, project, source text, target language, or relevant translations changed during the request.
 
 ### Implementation sequence
 
-1. Extension scaffold, player integration, and overlay using short original sample text.
+1. Extension scaffold, player integration, and overlay. Keep short original sample text in test fixtures only; do not reintroduce a demo button or demo-loading instructions.
 2. Data model, local storage, JSON import/export, and LRC parsing.
 3. LRCLIB adapter, search interface, and recording selection.
 4. Pasted translation assignment and manual per-line translation editing.
@@ -77,6 +86,8 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 - Pausing, seeking in either direction, changing speed, and fullscreen preserve synchronization.
 - Navigating between YouTube videos without a page reload clears old content and loads the appropriate project.
 - Reloading preserves text corrections, translation mappings, and timing.
+- Search edits survive reloads within their video; navigating to a video without a saved query picks up its title.
+- Start at and selected-line synchronization calculate the offset correctly, refresh displayed editor times, and activate lyrics at the exact adjusted start when karaoke is enabled. Selected-line sync uses whole video seconds.
 - Export followed by import preserves both languages, block order, sources, and timestamps.
 - Apply translation skips blank lines, warns on different counts, offers Apply anyway and Cancel, confirms replacement, and preserves original lyrics and timing.
 - Use focused tests for parsing, time selection, import validation, and storage. Manually verify rendering and player interaction in Firefox.
@@ -84,7 +95,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 ### Out of scope
 
 - Audio analysis, automatic word timing, and word highlighting.
-- Automatic translation through a custom AI service.
+- Automatic translation through a mandatory custom backend.
 - A mandatory backend, user accounts, and cloud synchronization.
 - YouTube captions as a required source; these may be investigated later as an additional provider.
 
