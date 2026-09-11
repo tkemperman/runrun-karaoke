@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const C = require('../src/core.js');
 
-function harness(translation = {}) {
+function harness(translation = {}, dictionary = {}) {
   const saved = {}; const sent = []; let listener, command;
   const browser = {
     runtime: { onMessage: { addListener(fn) { listener = fn; } } },
@@ -15,7 +15,7 @@ function harness(translation = {}) {
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProviders: new Map(), KaraokeTranslation: translation});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {
@@ -65,5 +65,42 @@ test('translation uses the saved key in the background without trusting a suppli
   const result = await h.request({ type: 'translate', apiKey: 'wrong-key', model: 'gpt-6-astra', language: 'nl', lines: [{ id: 'a', text: 'Hello' }] });
   assert.equal(received.apiKey, 'saved-key');
   assert.equal(result.data[0].translation, 'Hallo');
+  assert.ok(!JSON.stringify(result).includes('saved-key'));
+});
+
+
+test('furigana shares dictionary initialization and validates batches before accessing dictionaries', async () => {
+  let loads = 0, downloads = 0;
+  const dictionary = {
+    load: async () => { loads++; return null; },
+    download: async () => { downloads++; return { entries: [] }; },
+    createMatcher: () => ({ segment: text => text === '今日' ? [['今日', 'きょう']] : null })
+  };
+  const h = harness({}, dictionary);
+  assert.match((await h.request({ type: 'furigana', texts: [42] })).error, /Invalid/);
+  assert.equal(loads, 0);
+  const results = await Promise.all([h.request({ type: 'furigana', texts: ['今日', 'abc', ''] }), h.request({ type: 'furigana', texts: ['今日'] })]);
+  assert.equal(loads, 1); assert.equal(downloads, 1);
+  assert.equal(JSON.stringify(results[0].data), JSON.stringify([[['今日', 'きょう']], [['abc', null]], []]));
+});
+
+test('failed dictionary initialization can be retried', async () => {
+  let calls = 0;
+  const h = harness({}, {
+    load: async () => { if (!calls++) throw new Error('Storage unavailable'); return { entries: [] }; },
+    createMatcher: () => ({ segment: () => null })
+  });
+  assert.match((await h.request({ type: 'furigana', texts: ['今日'] })).error, /Storage unavailable/);
+  assert.ok((await h.request({ type: 'furigana', texts: ['今日'] })).data);
+  assert.equal(calls, 2);
+});
+
+test('AI furigana uses the stored key and keeps the key out of results', async () => {
+  let received;
+  const h = harness({ generateFurigana: async args => { received = args; return [{ id: 'a', furigana: [['海', 'うみ']] }]; } });
+  await h.request({ type: 'save-translation-settings', model: 'gpt-5', language: 'en', apiKey: 'saved-key' });
+  const result = await h.request({ type: 'ai-furigana', apiKey: 'untrusted-key', model: 'gpt-5', lines: [{ id: 'a', text: '海' }] });
+  assert.equal(received.apiKey, 'saved-key');
+  assert.equal(result.data[0].furigana[0][1], 'うみ');
   assert.ok(!JSON.stringify(result).includes('saved-key'));
 });

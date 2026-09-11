@@ -40,3 +40,44 @@ test('invalid requests fail before any network call', async () => {
     await assert.rejects(T.translate({ apiKey: 'key', model: 'gpt-6-astra', language: 'nl', lines, ...patch }, () => assert.fail('No network request expected')));
   }
 });
+
+const japanese = [{ id: 'a', text: '海へ進め！' }, { id: 'b', text: 'Hello' }, { id: 'c', text: '' }];
+const readings = [
+  { id: 'c', segments: [] },
+  { id: 'b', segments: [{ text: 'Hello', reading: null }] },
+  { id: 'a', segments: [{ text: '海', reading: 'うみ' }, { text: 'へ', reading: null }, { text: '進め', reading: 'すすめ' }, { text: '！', reading: null }] }
+];
+test('AI furigana sends the complete context, validates segments and maps reordered IDs', async () => {
+  const result = await T.generateFurigana({ apiKey: 'test-key', model: 'gpt-5', lines: japanese }, async (url, options) => {
+    const body = JSON.parse(options.body);
+    assert.deepEqual(JSON.parse(body.input), { lines: japanese });
+    assert.equal(body.store, false);
+    assert.equal(body.text.format.strict, true);
+    assert.equal(body.text.format.name, 'lyrics_furigana');
+    assert.match(body.instructions, /complete song as context/);
+    return { ok: true, json: async () => response(readings) };
+  });
+  assert.deepEqual(result.map(row => row.id), ['a', 'b', 'c']);
+  assert.deepEqual(result[0].furigana[2], ['進め', 'すすめ']);
+  const C = require('../src/core.js');
+  const project = C.project('abcdefghijk');
+  project.furiganaEnabled = true;
+  project.blocks = japanese.map((row, i) => ({ ...C.block(row.text, i, i + 1), id: row.id, furigana: result[i].furigana }));
+  assert.deepEqual(C.validate(JSON.parse(JSON.stringify(project))), project);
+});
+test('AI furigana rejects altered lyrics, missing readings, invalid kana and invalid IDs atomically', () => {
+  for (const segments of [
+    [{ text: '海へ進め', reading: 'うみへすすめ' }],
+    [{ text: '海へ進め！', reading: null }],
+    [{ text: '海へ進め！', reading: 'susume' }],
+    [null], []
+  ]) assert.throws(() => T.parseFurigana(response([...readings.slice(0, 2), { id: 'a', segments }]), japanese));
+  for (const invalid of [response(readings.slice(1)), response([readings[0], readings[0], readings[2]]),
+    response([...readings.slice(0, 2), { ...readings[2], id: 'unknown' }]),
+    { status: 'incomplete' }, { status: 'completed', output: [{ content: [{ type: 'refusal' }] }] },
+    { status: 'completed', output: [{ content: [{ type: 'output_text', text: 'bad json' }] }] }
+  ]) assert.throws(() => T.parseFurigana(invalid, japanese));
+});
+test('AI furigana rejects missing key before calling the API', async () => {
+  await assert.rejects(T.generateFurigana({ apiKey: '', model: 'gpt-5', lines: japanese }, () => assert.fail('Unexpected network request')), /API key/);
+});

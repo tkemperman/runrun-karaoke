@@ -1,12 +1,31 @@
 # Versions
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.0.0 was released on September 10, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.1.0 was released on September 11, 2026.
 
-## Unreleased
+## 1.1.0 — Released 2026-09-11
+
+### Furigana and AI tools
+
+- Rename Automatic translation to **AI translations**. Add **Generate furigana**, using the complete original song as context with the same saved OpenAI API key and selected model. The target translation language does not affect furigana.
+- Keep **Generate furigana (dictionary)** under **Display & timing** as a local option without an API key. Download and cache EDICT2/ENAMDICT on first use; retain Furikazan's MIT attribution and EDRDG dictionary credits.
+- Render ruby above current and next original lyric lines, with **Show furigana** saved per project. Align matching kana and okurigana outside ruby.
+- Add editable per-line readings and **Correct a term throughout this song** directly above **Line editor**. Exact term corrections can merge split kanji and apply to every occurrence in the current project; they are not persistent dictionary rules.
+- Change the dictionary button to **Re-generate furigana (dictionary)** when annotations exist. Confirm replacement of existing readings, including manual corrections. Show a spinner and disable generation buttons while working.
+- Recognize verb imperatives such as `進め → すすめ`, including with cached dictionaries. Prevent superseded rare lemma readings from generating preferred inflections.
+- Use strict AI output validation and reject incomplete, malformed or stale results without changing existing work. Editing original text clears that line's furigana; repeating a line copies it.
+- Store and export furigana segments and visibility in project JSON schema 2. Migrate schema 1 projects without mutating the input; reject annotations that do not reconstruct the original lyrics or contain invalid readings. LRC does not preserve furigana.
+
+### Maintenance and compatibility
 
 - Changed the Firefox add-on ID to `runrun-karaoke@silverwoodslabs`. Firefox treats this as a separate extension from builds signed with the previous ID, `youtube-karaoke@local.test`.
 - Removed 12 unused legacy icon files from the runtime assets and distribution package; retained the six manifest-referenced transparent mascot icons and microphone image.
-- Added the MIT License, copyright 2026 Thomas, and declared it in package metadata and documentation. Future extension packages include the license file.
+- Added the MIT License, copyright 2026 Thomas Kemperman, and declared it in package metadata and documentation. Future extension packages include the license file.
+
+### Validation
+
+- 56 automated tests passed, including AI request construction, invalid output rejection, dictionary inflections, saved-key routing, and furigana JSON round trips. JavaScript syntax checks passed.
+- The user confirmed the dictionary overlay and successful AI furigana generation with a live API request during development (September 11, 2026). Full Firefox visual/playback coverage remains outstanding.
+- Built `dist/runrun-karaoke-1.1.0.zip`; version metadata and ZIP integrity checks passed. The local build artifact is unsigned; release was confirmed by the user.
 
 ## 1.0.0 — Released 2026-09-10
 

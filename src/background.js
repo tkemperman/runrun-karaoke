@@ -1,10 +1,24 @@
 "use strict";
+let furiganaMatcherPromise;
+async function furiganaMatcher() {
+  if (!furiganaMatcherPromise) furiganaMatcherPromise = (async () => {
+    const record = await KaraokeDictionary.load() || await KaraokeDictionary.download();
+    return KaraokeDictionary.createMatcher(record.entries);
+  })().catch(error => { furiganaMatcherPromise = null; throw error; });
+  return furiganaMatcherPromise;
+}
 browser.runtime.onMessage.addListener(async (message, sender) => {
   if (!sender.tab || !sender.url?.startsWith("https://www.youtube.com/")) return;
   try {
     let data;
     const key = `project:${message.videoId}`;
     switch (message.type) {
+      case "furigana": {
+        if (!Array.isArray(message.texts) || message.texts.length > 200 || message.texts.some(text => typeof text !== "string" || text.length > 20000)) throw new Error("Invalid furigana request.");
+        const matcher = await furiganaMatcher();
+        data = message.texts.map(text => matcher.segment(text) || (text ? [[text, null]] : []));
+        break;
+      }
       case "load":
         if (!/^[\w-]{11}$/.test(message.videoId)) throw new Error("Invalid video ID.");
         data = (await browser.storage.local.get(key))[key] || null;
@@ -27,6 +41,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
         await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
         data = { hasApiKey: apiKey === undefined ? !!saved.apiKey : !!apiKey.trim() };
+        break;
+      }
+      case "ai-furigana": {
+        const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
+        data = await KaraokeTranslation.generateFurigana({ ...message, apiKey: saved.apiKey });
         break;
       }
       case "translate": {

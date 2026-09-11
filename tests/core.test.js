@@ -56,7 +56,7 @@ test('invalid imports reject unsupported schemas, bad times and duplicate IDs', 
   assert.throws(() => C.validate(p), /End time/);
   p.blocks[0].end = 4; p.blocks.push({...p.blocks[0]});
   assert.throws(() => C.validate(p), /unique/);
-  assert.throws(() => C.validate({...p, schemaVersion: 2}), /schema/);
+  assert.throws(() => C.validate({...p, schemaVersion: 99}), /schema/);
   assert.throws(() => C.parseLrc('plain text'), /No timed/);
 });
 test('live stamping closes the preceding line and permits retiming', () => {

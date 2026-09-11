@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ルンルンKARAOKE",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
   "icons": {
     "16": "src/mascot-icon-transparent-16.png",
@@ -15,11 +15,13 @@
     "storage",
     "https://www.youtube.com/*",
     "https://lrclib.net/*",
-    "https://api.openai.com/*"
+    "https://api.openai.com/*",
+    "https://www.edrdg.org/*"
   ],
   "background": {
     "scripts": [
       "src/core.js",
+      "src/dictionary.js",
       "src/search.js",
       "src/providers.js",
       "src/translation.js",
@@ -52,7 +54,11 @@
       "id": "runrun-karaoke@silverwoodslabs",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": ["searchTerms", "websiteContent", "authenticationInfo"]
+        "required": [
+          "searchTerms",
+          "websiteContent",
+          "authenticationInfo"
+        ]
       }
     }
   },

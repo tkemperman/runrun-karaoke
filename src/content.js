@@ -25,9 +25,12 @@
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
     details { border-top: 1px solid #39465c; padding: 12px 0; } summary { cursor: pointer; font-weight: 650; }
     #status { white-space: pre-wrap; color: #8de9dd; } #status.error { color: #ffb4b4; }
+    .muted.warning { color: #fef08a; background: #422f12; border: 1px solid #eab308; border-radius: 7px; padding: 10px 12px; }
     #rows { display: grid; gap: 12px; } .block { padding: 10px; border: 1px solid #41516d; border-radius: 8px; } .block.selected { border-color: #67e8f9; } .block label { font-size: 12px; }
     #overlay { position: absolute; left: 5%; right: 5%; bottom: 13%; text-align: center; z-index: 60; pointer-events: none; font-family: system-ui, sans-serif; text-shadow: 0 2px 5px #000, 0 0 8px #000; }
     #caption { display: inline-block; max-width: 100%; background: #07111bd9; border-radius: 10px; padding: 10px 20px; }
+    ruby { ruby-position: over; } rt { font-size: .5em; font-weight: 400; line-height: 1; }
+    #original:has(ruby), #next:has(ruby) { line-height: 2; }
     #original { color: #fff; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; } #translated { color: #a5f3fc; font-size: .67em; white-space: pre-wrap; margin-top: 5px; } #next { color: #cbd5e1; font-size: .5em; margin-top: 5px; }
   `;
   root.append(style);
@@ -106,6 +109,7 @@
   }
   function save() {
     if (!project) return;
+    updateFuriganaButton();
     updateTimingFields();
     let snapshot;
     try { snapshot = C.validate(project); } catch (error) { fail(error); return; }
@@ -185,6 +189,104 @@
   for (const field of [fontSize, position, showNext]) field.addEventListener("change", () => {
     browser.storage.local.set({ displaySettings: { fontSize: Number(fontSize.value), position: Number(position.value), showNext: showNext.checked } }).catch(fail);
   });
+  const furiganaLabel = el("label", null, display, { class: "checkbox-row" });
+  const showFurigana = el("input", null, furiganaLabel, { type: "checkbox" });
+  el("span", "Show furigana", furiganaLabel);
+  const furiganaStatus = el("p", "", display, { role: "status", class: "muted" });
+  el("p", "Dictionary generation works without an API key and downloads the EDICT2 and ENAMDICT dictionaries on first use. Lyrics are processed locally. Dictionary readings may differ from sung readings; correct them in Line editor. JSON exports include readings and visibility.", display, { class: "muted" });
+  el("a", "Dictionary credits and licence · EDRDG", display, { href: "https://www.edrdg.org/edrdg/licence.html", target: "_blank", rel: "noopener noreferrer" });
+  showFurigana.addEventListener("change", () => {
+    if (!project) { showFurigana.checked = false; return; }
+    project.furiganaEnabled = showFurigana.checked; save();
+  });
+  const furiganaActions = el("div", null, display, { class: "row", style: "margin-top: 8px" });
+  const hasFurigana = () => !!project?.blocks.some(row => row.furigana !== undefined);
+  const generateFurigana = button("Generate furigana (dictionary)", furiganaActions, () => generateReadings(hasFurigana()));
+  function updateFuriganaButton() {
+    if (!generateFurigana.disabled) generateFurigana.textContent = hasFurigana() ? "Re-generate furigana (dictionary)" : "Generate furigana (dictionary)";
+  }
+  async function generateReadings(replaceExisting) {
+    requireProject();
+    if (generateFurigana.disabled) return;
+    furiganaStatus.classList.remove("warning");
+    const target = project, token = generation;
+    const snapshot = JSON.stringify(target.blocks.map(row => [row.id, row.text, row.furigana]));
+    const japanese = target.blocks.filter(row => /[\p{Script=Han}]/u.test(row.text));
+    const pending = replaceExisting ? japanese : japanese.filter(row => row.furigana === undefined);
+    const existing = japanese.filter(row => row.furigana !== undefined).length;
+    if (!pending.length) {
+      furiganaStatus.classList.toggle("warning", existing > 0);
+      furiganaStatus.textContent = existing
+        ? "Furigana already exists for all Japanese lines. Enable Show furigana to display it, edit readings in Line editor, or choose Re-generate furigana."
+        : "No lyrics with kanji found to generate furigana for.";
+      return;
+    }
+    if (replaceExisting && existing && !window.confirm("Regenerate all furigana? This replaces existing readings, including manual and song-wide term corrections. Lyrics, translations and timing are preserved.")) return;
+    const activeButton = generateFurigana;
+    generateFurigana.disabled = true;
+    activeButton.setAttribute("aria-busy", "true");
+    activeButton.textContent = replaceExisting ? "Regenerating furigana…" : "Generating furigana…";
+    furiganaStatus.textContent = `${existing && !replaceExisting ? `Furigana already exists for ${existing} lines; these will be kept. ` : ""}Preparing dictionaries and ${replaceExisting ? "regenerating all" : "generating missing"} furigana… The first download can take a while.`;
+    try {
+      const results = [];
+      for (let start = 0; start < pending.length; start += 200) {
+        const batch = pending.slice(start, start + 200);
+        const parts = await request({ type: "furigana", texts: batch.map(row => row.text) });
+        if (project !== target || generation !== token) return;
+        if (JSON.stringify(target.blocks.map(row => [row.id, row.text, row.furigana])) !== snapshot) throw new Error("Lyrics or furigana changed. Generate again to use your latest edits.");
+        if (!Array.isArray(parts) || parts.length !== batch.length) throw new Error("Incomplete furigana response.");
+        batch.forEach((row, index) => results.push([row, C.validateFurigana(row.text, parts[index])]));
+      }
+      for (const [row, parts] of results) row.furigana = parts;
+      target.furiganaEnabled = true; showFurigana.checked = true;
+      renderRows(); save();
+      furiganaStatus.textContent = `${replaceExisting ? "Regenerated" : "Generated"} furigana for ${results.length} lines.${existing && !replaceExisting ? ` Existing furigana for ${existing} lines kept.` : ""} Review readings in Line editor.`;
+    } catch (error) { if (project === target && generation === token) furiganaStatus.textContent = error.message; }
+    finally {
+      generateFurigana.disabled = false;
+      activeButton.removeAttribute("aria-busy");
+      updateFuriganaButton();
+    }
+  }
+  const termCorrection = el("details", null, display);
+  el("summary", "Correct a term throughout this song", termCorrection);
+  const correctionTerm = input("Term", termCorrection);
+  correctionTerm.placeholder = "宝鐘";
+  const correctionReading = input("Reading (kana)", termCorrection);
+  correctionReading.placeholder = "ほうしょう";
+  el("p", "Applies to every exact occurrence in this song, including terms split into separate kanji. Existing readings for the term are replaced. If a match cuts through a longer annotated word, the remaining fragment becomes unannotated for review. Saved in your project and JSON export.", termCorrection, { class: "muted" });
+  const correctionStatus = el("p", "", termCorrection, { role: "status", class: "muted" });
+  const applyCorrection = button("Apply to all occurrences in this song", termCorrection, async () => {
+    requireProject();
+    if (applyCorrection.disabled) return;
+    const term = correctionTerm.value.trim(), reading = correctionReading.value.trim();
+    C.replaceFuriganaTerm(term, [[term, null]], term, reading);
+    const target = project, token = generation;
+    const matching = target.blocks.filter(row => row.text.includes(term));
+    if (!matching.length) { correctionStatus.textContent = "This term does not occur in the current lyrics."; return; }
+    const before = JSON.stringify(target.blocks.map(row => [row.id, row.text, row.furigana]));
+    applyCorrection.disabled = true; applyCorrection.setAttribute("aria-busy", "true");
+    correctionStatus.textContent = "Applying reading…";
+    try {
+      const missing = matching.filter(row => row.furigana === undefined);
+      const generated = new Map();
+      for (let start = 0; start < missing.length; start += 200) {
+        const batch = missing.slice(start, start + 200);
+        const parts = await request({ type: "furigana", texts: batch.map(row => row.text) });
+        if (project !== target || generation !== token) return;
+        if (!Array.isArray(parts) || parts.length !== batch.length) throw new Error("Incomplete furigana response.");
+        batch.forEach((row, index) => generated.set(row.id, C.validateFurigana(row.text, parts[index])));
+      }
+      if (project !== target || generation !== token) return;
+      if (JSON.stringify(target.blocks.map(row => [row.id, row.text, row.furigana])) !== before) throw new Error("Lyrics or furigana changed. Apply the correction again.");
+      const updates = matching.map(row => [row, C.replaceFuriganaTerm(row.text, row.furigana || generated.get(row.id), term, reading)]);
+      for (const [row, parts] of updates) row.furigana = parts;
+      renderRows(); save();
+      const count = matching.reduce((sum, row) => sum + row.text.split(term).length - 1, 0);
+      correctionStatus.textContent = `Applied ${term} → ${reading} to ${count} occurrences across ${matching.length} lines.`;
+    } catch (error) { if (project === target && generation === token) correctionStatus.textContent = error.message; }
+    finally { applyCorrection.disabled = false; applyCorrection.removeAttribute("aria-busy"); }
+  });
   const searchSection = section("Find lyrics · LRCLIB");
   const query = input("Song or artist", searchSection);
   let queryDirty = false;
@@ -251,7 +353,7 @@
   button("Cancel", translationWarning, () => { translationWarning.hidden = true; });
   translationDraft.addEventListener("input", () => { translationWarning.hidden = true; });
   el("p", "Apply matches lines in order, skipping blank lines. Different line counts show a warning with an Apply anyway option. Review the result in Line editor. Pasted text is temporary until applied.", translationSection, { class: "muted" });
-  const automatic = section("Automatic translation");
+  const automatic = section("AI translations");
   const provider = el("select", null, el("label", "Provider", automatic));
   el("option", "OpenAI", provider, { value: "openai" });
   const apiKey = input("OpenAI API key", automatic, "", "password");
@@ -299,7 +401,7 @@
     }
     project.translationLanguage = targetLanguage.value.trim(); renderRows(); save(); persistPreferences().catch(fail);
   });
-  el("p", "Translate all lines sends the original lyrics to OpenAI using the selected language. API usage is billed by OpenAI. Your key and preferences are saved locally in this extension. The key is excluded from project exports.", automatic, { class: "muted" });
+  el("p", "Both actions send the full original lyrics to OpenAI. Translate all lines uses the selected target language. Generate furigana uses the song context to choose Japanese readings; it does not listen to the audio. Without an API key, use dictionary generation under Display & timing. API usage is billed by OpenAI. Your key and preferences are saved locally in this extension. The key is excluded from project exports.", automatic, { class: "muted" });
   const automaticStatus = el("p", "", automatic, { role: "status" });
   const translateButton = button("Translate all lines", automatic, async () => {
     if (translateButton.disabled) return;
@@ -338,6 +440,46 @@
       translateButton.textContent = "Translate all lines";
     }
   });
+  const aiFuriganaStatus = el("p", "", automatic, { role: "status" });
+  const aiFuriganaButton = button("Generate furigana", automatic, async () => {
+    if (aiFuriganaButton.disabled) return;
+    requireProject();
+    const target = project, token = generation;
+    const snapshot = () => JSON.stringify(target.blocks.map(row => [row.id, row.text, row.furigana]));
+    const before = snapshot();
+    if (!target.blocks.some(row => /[\p{Script=Han}]/u.test(row.text))) {
+      aiFuriganaStatus.textContent = "No lyrics with kanji found to generate furigana for."; return;
+    }
+    if (hasFurigana() && !window.confirm("Generate furigana with AI? This replaces existing readings, including manual and song-wide term corrections. Lyrics, translations and timing are preserved.")) return;
+    aiFuriganaButton.disabled = true;
+    aiFuriganaButton.setAttribute("aria-busy", "true");
+    aiFuriganaButton.textContent = "Generating furigana…";
+    aiFuriganaStatus.textContent = "Generating furigana using the full song as context…";
+    try {
+      await preferencesReady;
+      await persistPreferences(apiKey.value.trim() || undefined);
+      apiKey.value = "";
+      if (project !== target || generation !== token) return;
+      if (!hasApiKey) throw new Error("Enter your OpenAI API key, or use dictionary generation under Display & timing.");
+      if (snapshot() !== before) throw new Error("Lyrics or furigana changed. Generate again to use your latest edits.");
+      const readings = await request({ type: "ai-furigana", model: model.value,
+        lines: target.blocks.map(row => ({ id: row.id, text: row.text })) });
+      if (project !== target || generation !== token) return;
+      if (snapshot() !== before) throw new Error("Lyrics or furigana changed during the request. Result discarded; generate again to use your latest edits.");
+      const byId = new Map(readings.map(row => [row.id, row.furigana]));
+      const updates = target.blocks.map(row => [row, C.validateFurigana(row.text, byId.get(row.id))]);
+      for (const [row, parts] of updates) row.furigana = parts;
+      target.furiganaEnabled = true; showFurigana.checked = true;
+      renderRows(); save();
+      aiFuriganaStatus.textContent = "Generated furigana with song context. Review readings in Line editor.";
+    } catch (error) {
+      if (project === target && generation === token) aiFuriganaStatus.textContent = error.message;
+    } finally {
+      aiFuriganaButton.disabled = false;
+      aiFuriganaButton.removeAttribute("aria-busy");
+      aiFuriganaButton.textContent = "Generate furigana";
+    }
+  });
   const manual = section("Paste lyrics & import / export");
   const originalDraft = input("Original lyrics (one block per line), or timed LRC", manual, "", "textarea");
   button("Use pasted lyrics", manual, () => {
@@ -370,6 +512,7 @@
   });
   function replaceAllowed() { return !project.blocks.length || window.confirm("Replace the current lyrics and timing? Export your project first if you want to keep a copy."); }
   const editor = section("Line editor"); editor.open = true;
+  editor.before(termCorrection);
   el("p", "Select a line, then mark it as the vocals begin. Alt+Shift+M marks the next line while this editor is open (outside text fields). Times are video seconds, including the delay. Blank end times last until the next timed line.", editor, { class: "muted" });
   const clock = el("p", "", editor);
   const stampButton = button("Mark selected line now", editor, mark);
@@ -385,7 +528,12 @@
     for (const source of project?.sources || []) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
   }
   function refresh() {
+    updateFuriganaButton();
     updateTimingFields();
+    showFurigana.checked = !!project?.furiganaEnabled;
+    furiganaStatus.textContent = "";
+    correctionStatus.textContent = ""; correctionTerm.value = ""; correctionReading.value = "";
+    furiganaStatus.classList.remove("warning");
     targetLanguage.value = project?.translationLanguage || "en";
     title.textContent = videoId ? "Loading video title…" : "Open a YouTube watch page to begin.";
     updateVideoTitle();
@@ -400,7 +548,7 @@
       button("Seek", actions, () => { if (row.start === null || !video()) throw new Error("Set a start time first."); video().currentTime = Math.max(0, row.start + project.offset); });
       button("↑", actions, () => { if (index) { [project.blocks[index - 1], project.blocks[index]] = [row, project.blocks[index - 1]]; selected = index - 1; renderRows(); save(); } }).ariaLabel = "Move line up";
       button("↓", actions, () => { if (index < project.blocks.length - 1) { [project.blocks[index + 1], project.blocks[index]] = [row, project.blocks[index + 1]]; selected = index + 1; renderRows(); save(); } }).ariaLabel = "Move line down";
-      button("Repeat", actions, () => { project.blocks.splice(index + 1, 0, { ...C.block(row.text), translations: { ...row.translations } }); selected = index + 1; renderRows(); save(); });
+      button("Repeat", actions, () => { project.blocks.splice(index + 1, 0, { ...C.block(row.text), translations: { ...row.translations }, ...(row.furigana ? { furigana: structuredClone(row.furigana) } : {}) }); selected = index + 1; renderRows(); save(); });
       button("Delete", actions, () => { if (!window.confirm(`Delete line ${index + 1}?`)) return; project.blocks.splice(index, 1); selected = Math.min(selected, project.blocks.length); renderRows(); save(); });
       const times = el("div", null, box, { class: "row" });
       for (const key of ["start", "end"]) {
@@ -410,7 +558,32 @@
           try { C.validate(project); save(); }
           catch (error) { row[key] = previous; renderRows(); fail(error); } });
       }
-      const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; save(); });
+      const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; delete row.furigana; furiganaEditor?.remove(); save(); });
+      let furiganaEditor;
+      if (row.furigana) {
+        furiganaEditor = el("details", null, box);
+        el("summary", "Edit furigana readings", furiganaEditor);
+        button("Correct a combined term throughout this song", furiganaEditor, () => {
+          termCorrection.open = true;
+          correctionTerm.value = ""; correctionReading.value = "";
+          termCorrection.scrollIntoView({ block: "nearest" }); correctionTerm.focus();
+        });
+        row.furigana.forEach(part => {
+          if (part[1] === null) return;
+          const reading = input(part[0], furiganaEditor, part[1]);
+          button("Use this reading throughout this song…", furiganaEditor, () => {
+            termCorrection.open = true;
+            correctionTerm.value = part[0]; correctionReading.value = reading.value;
+            termCorrection.scrollIntoView({ block: "nearest" }); correctionReading.focus();
+          });
+          reading.addEventListener("change", () => {
+            const previous = part[1]; part[1] = reading.value.trim();
+            try { C.validateFurigana(row.text, row.furigana); save(); }
+            catch (error) { part[1] = previous; reading.value = previous; fail(error); }
+          });
+        });
+        button("Clear this line’s furigana", furiganaEditor, () => { delete row.furigana; renderRows(); save(); });
+      }
       const translation = input(`Translation (${project.translationLanguage})`, box, row.translations[project.translationLanguage] || "", "textarea");
       translation.addEventListener("input", () => { row.translations[project.translationLanguage] = translation.value; save(); });
     });
@@ -441,6 +614,21 @@
   const original = el("div", "", caption, { id: "original" });
   const translated = el("div", "", caption, { id: "translated" });
   const next = el("div", "", caption, { id: "next" });
+  function renderOriginal(node, row) {
+    node.replaceChildren();
+    if (!row) return;
+    if (!project.furiganaEnabled || !row.furigana) { node.textContent = row.text; return; }
+    for (const [text, reading] of row.furigana) {
+      if (!reading) { node.append(document.createTextNode(text)); continue; }
+      const aligned = C.alignKana(text, reading);
+      node.append(document.createTextNode(aligned.prefix));
+      if (aligned.base && aligned.annotation) {
+        const ruby = el("ruby", aligned.base, node);
+        el("rt", aligned.annotation, ruby);
+      } else node.append(document.createTextNode(aligned.base));
+      node.append(document.createTextNode(aligned.suffix));
+    }
+  }
   let lastCaption = "";
   function tick() {
     const media = video(), player = document.getElementById("movie_player");
@@ -484,8 +672,8 @@
     overlay.style.bottom = `${position.value}%`;
     const nextRow = active && showNext.checked ? project.blocks.filter(row => row.start !== null && row.start > active.start && row.text.trim()).sort((a, b) => a.start - b.start)[0] : null;
     const values = [active?.text || "", active?.translations[project?.translationLanguage] || "", nextRow?.text || ""];
-    const signature = JSON.stringify(values);
-    if (signature !== lastCaption) { [original.textContent, translated.textContent, next.textContent] = values; translated.hidden = !values[1]; next.hidden = !values[2]; lastCaption = signature; }
+    const signature = JSON.stringify([values, project?.furiganaEnabled, active?.furigana, nextRow?.furigana]);
+    if (signature !== lastCaption) { renderOriginal(original, active); translated.textContent = values[1]; renderOriginal(next, nextRow); translated.hidden = !values[1]; next.hidden = !values[2]; lastCaption = signature; }
     if (!panel.hidden) clock.textContent = `Video: ${(media?.currentTime || 0).toFixed(2)}s · ${project?.blocks.length || 0} lines`;
   }
   document.body.append(host);

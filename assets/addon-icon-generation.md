@@ -2,6 +2,10 @@
 
 Generated with the built-in image generation tool using `assets/mascot.png` as the identity reference, followed by a background-extraction edit. Master image: `assets/addon-icon.png`. Runtime exports: `src/mascot-icon-transparent-{16,32,48,64,96,128}.png`, resized with ImageMagick. The background is transparent (PNG alpha).
 
+These six transparent PNG exports are the icons referenced by the current manifest for **ルンルンKARAOKE**. The extension ZIP includes the runtime exports and `src/microphone.png`; the master artwork and this provenance document remain in the repository. See [mascot-generation.md](mascot-generation.md) for the README mascot and [../readme.md](../readme.md) for current packaging instructions.
+
+The prompts below record the original generation process; their historical wording is retained.
+
 ## Transparency edit prompt
 
 Use case: background-extraction. Edit target: supplied Runrun Karaoke add-on icon. Change ONLY the exterior white background to genuine fully transparent alpha. Preserve exactly the cat head, navy outline, all interior colors including cream ears and muzzle, expression, framing and dimensions. Clean antialiased edges without white fringe. Output transparent PNG. No checkerboard drawing, no solid background, no shadow. All pixels outside the head must be alpha zero.
