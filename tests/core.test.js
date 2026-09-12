@@ -47,7 +47,7 @@ test('untimed blocks never appear, open ends stop at the next timed block', () =
 });
 test('JSON round trip preserves Japanese, translations and source provenance', () => {
   const p = C.project('h3chCOV_phw'); p.blocks = [C.block('こんにちは', 1, 2)];
-  p.blocks[0].translations.en = 'Hello'; p.sources = [{ provider: 'example', url: 'https://example.com/', original: 'Original source' }];
+  p.blocks[0].translations.en = 'Hello'; p.source = { provider: 'example', url: 'https://example.com/' };
   const result = C.validate(JSON.parse(JSON.stringify(p)));
   assert.deepEqual(result, p); assert.notEqual(result.blocks, p.blocks);
 });
@@ -105,4 +105,82 @@ test('sync rejects invalid times without changing the project', () => {
   assert.throws(() => C.syncLine(p, p.blocks[0], NaN), /Invalid/);
   assert.throws(() => C.syncLine(p, undefined, 33), /Load lyrics/);
   assert.equal(JSON.stringify(p), before);
+});
+
+test('legacy projects retain only the last source without changing the input', () => {
+  const p = C.project('abcdefghijk');
+  p.blocks = [C.block('歌', 1, 2)];
+  p.blocks[0].translations.en = 'Song';
+  p.schemaVersion = 2; delete p.source;
+  p.sources = [
+    { provider: 'lrclib', url: 'https://lrclib.net/api/get/10831983' },
+    { provider: 'lrclib', url: 'https://lrclib.net/api/get/15913865', original: '歌' }
+  ];
+  const before = JSON.stringify(p);
+  const result = C.validate(p);
+  assert.deepEqual(result.source, { provider: 'lrclib', url: p.sources[1].url });
+  assert.equal(result.sources, undefined);
+  assert.equal(result.schemaVersion, 3);
+  assert.deepEqual(result.blocks, p.blocks);
+  assert.equal(JSON.stringify(p), before);
+  assert.deepEqual(C.validate(JSON.parse(JSON.stringify(result))), result);
+  assert.equal(C.validate(C.project('abcdefghijk')).source, null);
+});
+
+test('video URL is derived from the matching ID for new and imported projects', () => {
+  const p = C.project('G3xEh7dHg68');
+  const expected = 'https://www.youtube.com/watch?v=G3xEh7dHg68';
+  assert.equal(p.videoUrl, expected);
+  delete p.videoUrl;
+  assert.equal(C.validate(p).videoUrl, expected);
+  assert.equal(p.videoUrl, undefined);
+  p.videoUrl = 'https://www.youtube.com/watch?v=3n91MZ6-z6M';
+  const result = C.validate(p);
+  assert.equal(result.videoUrl, expected);
+  assert.deepEqual(C.validate(JSON.parse(JSON.stringify(result))), result);
+});
+
+test('original video titles survive JSON round trips and older projects can omit them', () => {
+  const title = '【Live / 歌】Original Title!';
+  const p = C.project('abcdefghijk', title);
+  assert.equal(C.validate(JSON.parse(JSON.stringify(p))).videoTitle, title);
+  delete p.videoTitle;
+  assert.equal(C.validate(p).videoTitle, '');
+  assert.equal(p.videoTitle, undefined);
+  assert.throws(() => C.validate({...p, videoTitle: []}), /videoTitle/);
+});
+
+test('moving a line start shifts its end and later rows equally, with offset applied once', () => {
+  const p = C.project('abcdefghijk'); p.offset = 9.21;
+  p.blocks = [C.block('Before', 1, 3), C.block('歌', 5, 8), C.block('', 9, 10), C.block('Later', 12), C.block('Untimed')];
+  p.blocks[1].translations.en = 'Song';
+  p.blocks[1].furigana = [['歌', 'うた']];
+  const original = structuredClone(p), rows = [...p.blocks];
+  C.moveLineStart(p, p.blocks[1], 16.545);
+  assert.deepEqual(p.blocks.map(b => [b.start,b.end]), [[1,3],[7.335,10.335],[11.335,12.335],[14.335,null],[null,null]]);
+  assert.equal(p.offset, 9.21);
+  assert.deepEqual(p.blocks[1].translations, original.blocks[1].translations);
+  assert.deepEqual(p.blocks[1].furigana, original.blocks[1].furigana);
+  p.blocks.forEach((row,index) => assert.equal(row,rows[index]));
+  C.moveLineStart(p, p.blocks[1], 14.21);
+  assert.deepEqual(p, original);
+});
+test('moving a start rejects invalid downstream times without partial changes', () => {
+  const p = C.project('abcdefghijk');
+  p.blocks = [C.block('Selected', 10, 12), C.block('Later in editor', 1, 2), C.block('Last', 86398, 86400)];
+  const before = structuredClone(p);
+  for (const start of [5, 11, NaN, Infinity, null]) {
+    assert.throws(() => C.moveLineStart(p, p.blocks[0], start));
+    assert.deepEqual(p, before);
+  }
+});
+test('initial timing has no delta and open-ended rows retain their missing end', () => {
+  const p = C.project('abcdefghijk'); p.offset = 2;
+  p.blocks = [C.block('Untimed'), C.block('Next', 10, 12)];
+  C.moveLineStart(p, p.blocks[0], 5);
+  assert.deepEqual(p.blocks.map(b => [b.start,b.end]), [[3,null],[10,12]]);
+  C.moveLineStart(p, p.blocks[0], 6);
+  assert.deepEqual(p.blocks.map(b => [b.start,b.end]), [[4,null],[11,13]]);
+  C.moveLineStart(p, p.blocks[0], null);
+  assert.deepEqual(p.blocks.map(b => [b.start,b.end]), [[null,null],[11,13]]);
 });

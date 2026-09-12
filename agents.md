@@ -8,7 +8,16 @@ Keep the user-facing brand exactly `ルンルンKARAOKE`; technical package name
 
 ## Current scope decision
 
-Use **AI translations** below **Manual translation** for optional OpenAI translation and contextual furigana generation, with persistent local API key, provider, model, and target language preferences. Use strict JSON output mapped by block ID; preserve existing work on invalid or stale responses and confirm replacement. Keep manual translation entry and JSON import/export. Do not reintroduce MyJpop fetching. Apply translation assigns pasted non-empty lines in order, without semantic matching. Different line counts require an explicit Apply anyway choice; unmatched originals stay unchanged and extra translations are ignored. Confirm replacement of existing translations. Artist alias lookup uses explicit spellings and does not translate text.
+Use **AI translation** below **Manual translation** for optional OpenAI translation and contextual furigana generation, with persistent local API key, provider, model, and target language preferences. Use strict JSON output mapped by block ID; preserve existing work on invalid or stale responses and confirm replacement. Keep manual translation entry and JSON import/export. Do not reintroduce MyJpop fetching. Apply translation assigns pasted non-empty lines in order, without semantic matching. Different line counts require an explicit Apply anyway choice; unmatched originals stay unchanged and extra translations are ignored. Confirm replacement of existing translations. Artist alias lookup uses explicit spellings and does not translate text.
+
+## GitHub lyrics repositories
+
+- Keep a single configurable public retrieval repository and a separate upload repository, each with an explicit branch (default `main`). Network actions remain user-triggered.
+- Manage the GitHub token only through extension Settings and background storage. Never return it to content scripts or put it in project payloads. Public reads are anonymous.
+- Upload paths use `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`; preserve Unicode letters and keep video ID as the matching key regardless of title changes.
+- Use the existing project schema and a separately versioned `index.json` catalog. Match exact video IDs for loading; title/artist filtering can discover other performances without reusing their timing automatically.
+- Confirm project replacement and publication destinations. Reject stale downloaded projects after local edits and use the reviewed GitHub file SHA to detect conflicting uploads.
+- The standalone `lyrics-repository-template/` includes the index Action. Keep its validator copies aligned with `src/core.js` and `src/repositories.js`; regression tests enforce this. Do not bundle the template in the extension archive.
 
 ## Objective
 
@@ -31,7 +40,8 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 - Use the player's current playback position as the clock to avoid accumulated drift when pausing, seeking, or changing playback speed.
 - Store customized performances by YouTube video ID. Keep retrieved source data separate from user corrections so refreshing a source does not overwrite edits.
 - Each text block has a stable ID, start and end times in seconds, original text, translations keyed by language, and optional furigana segments. Repeated lines have separate blocks.
-- Project metadata includes video ID, title, artist, original language, selected translation language, sources, a global timing offset, and furigana visibility.
+- Project schema 3 metadata includes `videoId`, its canonical `videoUrl`, the original unsanitized `videoTitle`, lyric title, artist, languages, one `source` object (provider and URL) or null, timing offset and furigana visibility. Derive URLs from video IDs; capture video titles from the matching watch page. Migrate older source arrays using only their last entry.
+- Editing an individual line start shifts its end and all following rows by the same delta without confirmation. Preserve untimed values; initial timing has no previous delta. Validate the whole shift before applying it.
 - Stored block times exclude the global offset. Overlay selection and Line editor display use video time (`block time + offset`); convert edited video times back to stored times. Apply the offset exactly once and test exact start/end boundaries.
 - Version the storage and export schema and provide migrations when it changes.
 - Support empty intervals for instrumental passages and additional blocks for live interludes.
@@ -50,10 +60,10 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 
 ### Furigana (1.1.0)
 
-- **AI translations → Generate furigana** uses the full original song as context with the existing saved key and model. Keep the key in the background; do not include it in project exports. No audio is sent or analyzed. Explain API billing and that contextual readings still need review.
+- **AI translation → Generate furigana** uses the full original song as context with the existing saved key and model. Keep the key in the background; do not include it in project exports. No audio is sent or analyzed. Explain API billing and that contextual readings still need review.
 - Keep local EDICT2/ENAMDICT generation as the option without an API key under **Display & timing**, with the button below the dictionary credits. Cache dictionaries in IndexedDB and retain Furikazan/EDRDG attribution.
 - **Show furigana** controls ruby for both current and next original lyric lines. Generation enables it; toggling it alone must not trigger downloads or API requests.
-- Store `furigana` as ordered `[text, readingOrNull]` segments and `furiganaEnabled` at project level in JSON schema 2. Validate exact text reconstruction and kana readings. Migrate schema 1 without modifying the input. Keep application version and project schema version separate.
+- Store `furigana` as ordered `[text, readingOrNull]` segments and `furiganaEnabled` at project level in JSON schema 3 (introduced in schema 2). Validate exact text reconstruction and kana readings. Migrate schema 1 without modifying the input. Keep application version and project schema version separate.
 - Render matching leading kana and okurigana outside ruby. Keep compound/name readings together when appropriate. Dictionary imperative handling must work for cached entries and avoid superseded rare readings.
 - Put **Correct a term throughout this song** in its own section directly above **Line editor**. Per-line shortcuts open that section. Apply exact term corrections to every occurrence in the current project, merging split segments; leave cut fragments of longer words unannotated for review. Generate missing annotations locally before applying corrections. Do not imply these edits are global or persistent dictionary rules.
 - Confirm replacement of existing furigana, including manual corrections. The dictionary button becomes **Re-generate furigana (dictionary)** when annotations exist. Show a spinner and disable the active button until completion or failure.
@@ -70,7 +80,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 4. Accept pasted translations and assign them in order with Apply translation, allowing manual corrections. Display Japanese kanji/kana with English directly underneath, changing together as one block.
 5. Provide a readable overlay showing the active line and optionally the next line, with visibility, text size, vertical placement, and fullscreen controls. Center both languages inside the YouTube player.
    - Toggle subtitles with a configurable shortcut, default `Alt+K`, or a microphone Karaoke button injected after `[data-yt-extension="transcript-copier"]` in `ytd-watch-metadata #owner`. Use the supplied microphone image as a 19×19 monochrome mask. Add an adjacent gear button that toggles the lyrics and timing settings open or closed. Fall back to the end of the owner row when Transcript tools are absent.
-   - The extension toolbar icon opens Settings directly. Do not add an intermediate on/off menu.
+   - The extension toolbar icon and Firefox extension preferences open the same in-video Settings panel as the gear. Keep all preferences there; GitHub credentials use an isolated extension-origin frame styled like AI translation. Configure the activation shortcut through Firefox’s own extension shortcut manager. Do not add a separate preferences popup or an intermediate on/off menu.
    - Keep button and shortcut state synchronized. New tabs start with karaoke off; activation is per tab.
 6. Provide an earlier/later timing offset saved per video.
    - **Start at** shows the earliest timed, non-empty lyric's video start in minutes:seconds. Editing it calculates the global offset from the stored start. If no lyric is timed, it sets the first non-empty line’s start. Show yellow warnings for untimed recording selections and remaining untimed lyrics.
@@ -100,7 +110,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 - Reloading preserves text corrections, translation mappings, and timing.
 - Search edits survive reloads within their video; navigating to a video without a saved query picks up its title.
 - Start at and selected-line synchronization calculate the offset correctly, refresh displayed editor times, and activate lyrics at the exact adjusted start when karaoke is enabled. Selected-line sync preserves milliseconds and also initializes untimed lines.
-- Export followed by import preserves both languages, block order, sources, timestamps, furigana segments, and visibility. Schema 1 imports remain supported.
+- Export followed by import preserves both languages, block order, the current source, original video metadata, timestamps, furigana segments, and visibility. Schema 1 and 2 imports remain supported.
 - Both furigana methods support review in Line editor and song-wide term correction. Verify spinner/disabled state, replacement cancellation, stale-result protection, and current/next-line ruby in Firefox.
 - Apply translation skips blank lines, warns on different counts, offers Apply anyway and Cancel, confirms replacement, and preserves original lyrics and timing.
 - Use focused tests for parsing, time selection, import validation, and storage. Manually verify rendering and player interaction in Firefox.
@@ -166,7 +176,7 @@ Derive timing from the actual performance using existing Japanese lyrics as the 
 
 ## Working practices
 
-- The current version is `1.1.1` (released September 12, 2026); `1.1.0` was released September 11, 2026; `1.0.0` was released on September 10, 2026. Treat every requested version bump as a release by default, dated on the day of the bump, unless the user explicitly specifies otherwise. Do not label it "Local build" or ask for separate release confirmation. Keep manifest, package metadata, package instructions, and release notes consistent. Release status does not imply that the add-on has been signed or published to an external service. The user will commit when the add-on works sufficiently well; do not create commits unless explicitly asked. A release does not imply that all acceptance criteria have passed.
+- The current version is `1.2.0` (released September 12, 2026), following `1.1.1` released earlier the same day; `1.1.0` was released September 11, 2026; `1.0.0` was released on September 10, 2026. Treat every requested version bump as a release by default, dated on the day of the bump, unless the user explicitly specifies otherwise. Do not label it "Local build" or ask for separate release confirmation. Keep manifest, package metadata, package instructions, and release notes consistent. Release status does not imply that the add-on has been signed or published to an external service. The user will commit when the add-on works sufficiently well; do not create commits unless explicitly asked. A release does not imply that all acceptance criteria have passed.
 
 - Complete the outstanding line-based karaoke acceptance checks before implementing version 2.0.0 audio analysis.
 - Verify source availability and the reference video during implementation. Do not claim successful synchronization without checking the actual performance.

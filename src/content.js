@@ -25,6 +25,7 @@
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
     details { border-top: 1px solid #39465c; padding: 12px 0; } summary { cursor: pointer; font-weight: 650; }
     #status { white-space: pre-wrap; color: #8de9dd; } #status.error { color: #ffb4b4; }
+    #repository-status { white-space: pre-wrap; color: #8de9dd; } #repository-status.error { color: #ffb4b4; }
     .muted.warning { color: #fef08a; background: #422f12; border: 1px solid #eab308; border-radius: 7px; padding: 10px 12px; }
     #rows { display: grid; gap: 12px; } .block { padding: 10px; border: 1px solid #41516d; border-radius: 8px; } .block.selected { border-color: #67e8f9; } .block label { font-size: 12px; }
     #overlay { position: absolute; left: 5%; right: 5%; bottom: 13%; text-align: center; z-index: 60; pointer-events: none; font-family: system-ui, sans-serif; text-shadow: 0 2px 5px #000, 0 0 8px #000; }
@@ -301,14 +302,20 @@
     queryDirty = true;
     browser.storage.local.set({ [`lyricsSearch:${videoId}`]: { query: query.value } }).catch(fail);
   });
-  function updateVideoTitle() {
-    if (!videoId) return;
+  function currentVideoTitle() {
     // YouTube updates its URL before the watch page metadata finishes loading.
     const watch = document.querySelector("ytd-watch-flexy");
-    if (watch?.getAttribute("video-id") !== videoId) return;
-    const currentTitle = watch.querySelector("ytd-watch-metadata h1")?.textContent?.trim();
+    if (!videoId || watch?.getAttribute("video-id") !== videoId) return "";
+    return watch.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || "";
+  }
+  function updateVideoTitle() {
+    const currentTitle = currentVideoTitle();
     if (currentTitle) {
       title.textContent = currentTitle;
+      if (project && project.videoTitle !== currentTitle) {
+        project.videoTitle = currentTitle;
+        save();
+      }
       if (queryReady && !queryDirty) query.value = currentTitle;
     }
   }
@@ -335,7 +342,7 @@
     if (!blocks.length) throw new Error("This recording has no lyrics.");
     if (!replaceAllowed()) return;
     project.blocks = blocks; project.title = source.title; project.artist = source.artist;
-    project.sources.push({ provider: "lrclib", url: source.url, original: source.syncedLyrics || source.plainLyrics });
+    project.source = { provider: "lrclib", url: source.url };
     selected = 0; refresh(); save();
   });
   const translationSection = section("Manual translation");
@@ -366,7 +373,7 @@
   button("Cancel", translationWarning, () => { translationWarning.hidden = true; });
   translationDraft.addEventListener("input", () => { translationWarning.hidden = true; });
   el("p", "Apply matches lines in order, skipping blank lines. Different line counts show a warning with an Apply anyway option. Review the result in Line editor. Pasted text is temporary until applied.", translationSection, { class: "muted" });
-  const automatic = section("AI translations");
+  const automatic = section("AI translation");
   const provider = el("select", null, el("label", "Provider", automatic));
   el("option", "OpenAI", provider, { value: "openai" });
   const apiKey = input("OpenAI API key", automatic, "", "password");
@@ -493,6 +500,87 @@
       aiFuriganaButton.textContent = "Generate furigana";
     }
   });
+  const repositorySection = section("Lyrics repositories · GitHub");
+  el("p", "Configure separate retrieval and upload repositories below. Search downloads the public catalog; publishing sends the complete project, including original lyrics, translations, timing and furigana, to your upload repository.", repositorySection, { class: "muted" });
+  // Keep the saved token inside an extension-origin frame, outside YouTube's DOM.
+  const repositoryPreferences = el("iframe", null, repositorySection, {
+    src: browser.runtime.getURL("src/settings.html"), title: "GitHub repository settings",
+    style: "width:100%;height:640px;border:0;display:block;color-scheme:dark"
+  });
+  window.addEventListener("message", event => {
+    if (event.source !== repositoryPreferences.contentWindow || event.origin !== browser.runtime.getURL("").replace(/\/$/, "")) return;
+    if (event.data?.type === "karaoke-repository-height" && Number.isFinite(event.data.height)) {
+      repositoryPreferences.style.height = `${Math.max(100, Math.min(2000, event.data.height))}px`;
+    }
+  });
+  const repositoryQuery = input("Filter catalog by title, artist or video ID (blank: this video)", repositorySection);
+  const repositoryResults = el("select", null, repositorySection, { "aria-label": "Repository projects", style: "width:100%;margin:8px 0" });
+  let catalogEntries = [], catalogSource = null;
+  function filterCatalog() {
+    const q = repositoryQuery.value.trim().toLocaleLowerCase();
+    repositoryResults.replaceChildren();
+    for (const entry of catalogEntries.filter(e => q ? `${e.title} ${e.artist} ${e.videoId}`.toLocaleLowerCase().includes(q) : e.videoId === videoId)) {
+      el("option", `${entry.title || entry.videoId} · ${entry.artist} · ${entry.translationLanguage}${entry.videoId === videoId ? " · this video" : " · other video"}`, repositoryResults, { value: entry.file });
+    }
+  }
+  repositoryQuery.addEventListener("input", filterCatalog);
+  const repositoryActions = el("div", null, repositorySection, { class: "row" });
+  const repositoryStatus = el("p", "", repositorySection, { id: "repository-status", role: "status", "aria-live": "polite" });
+  function repositoryNotify(message, error = false) {
+    repositoryStatus.textContent = message;
+    repositoryStatus.classList.toggle("error", error);
+  }
+  function repositoryButton(label, action) {
+    return button(label, repositoryActions, async () => {
+      repositoryNotify("");
+      try { await action(); }
+      catch (error) { repositoryNotify(error.message || String(error), true); }
+    });
+  }
+  const catalogButton = repositoryButton("Search repository", async () => {
+    requireProject(); const currentGeneration = generation;
+    catalogButton.disabled = true; catalogButton.textContent = "Searching…";
+    try {
+      const preferences = await request({ type: "repository-settings" });
+      const entries = await request({ type: "repository-search", source: preferences.retrieval });
+      if (generation !== currentGeneration) return;
+      catalogEntries = entries; catalogSource = preferences.retrieval; filterCatalog();
+      repositoryNotify(`${repositoryResults.options.length} matching projects. Change the filter to search the catalog.`);
+    } finally { catalogButton.disabled = false; catalogButton.textContent = "Search repository"; }
+  });
+  const repositoryLoad = repositoryButton("Load selected project", async () => {
+    requireProject();
+    const entry = catalogEntries.find(e => e.file === repositoryResults.value);
+    if (!entry) throw new Error("Search and select a repository project first.");
+    if (entry.videoId !== videoId) {
+      repositoryNotify(`Open https://www.youtube.com/watch?v=${entry.videoId} to load this performance.`); return;
+    }
+    const currentGeneration = generation, snapshot = JSON.stringify(project);
+    repositoryLoad.disabled = true;
+    try {
+      const preferences = await request({ type: "repository-settings" });
+      if (JSON.stringify(preferences.retrieval) !== JSON.stringify(catalogSource)) throw new Error("Retrieval settings changed. Search again.");
+      const imported = C.validate(await request({ type: "repository-load", file: entry.file, videoId, source: catalogSource }));
+      if (generation !== currentGeneration || JSON.stringify(project) !== snapshot) throw new Error("Project changed while downloading. Load again to review replacement.");
+      if (!replaceAllowed()) return;
+      project = imported; selected = 0; refresh(); save();
+    } finally { repositoryLoad.disabled = false; }
+  });
+  const publishButton = repositoryButton("Publish project to GitHub", async () => {
+    requireProject();
+    if (!project.blocks.some(b => b.text.trim())) throw new Error("Load lyrics before publishing.");
+    const snapshot = C.validate(project), currentGeneration = generation, videoTitle = currentVideoTitle();
+    if (!videoTitle) throw new Error("Wait for the YouTube video title before publishing.");
+    publishButton.disabled = true; publishButton.textContent = "Checking destination…";
+    try {
+      const destination = await request({ type: "repository-inspect", project: snapshot, videoTitle });
+      if (generation !== currentGeneration || currentVideoTitle() !== videoTitle || JSON.stringify(project) !== JSON.stringify(snapshot)) throw new Error("Project changed. Start publishing again.");
+      if (!window.confirm(`${destination.sha ? "Replace the existing file" : "Publish this project"} on GitHub?\n\n${destination.target.repo} · ${destination.target.branch}\n${destination.file}\n\nThis uploads all lyrics, translations, timing and furigana in this project.`)) return;
+      publishButton.textContent = "Publishing…";
+      await request({ type: "repository-publish", project: snapshot, videoTitle, sha: destination.sha, target: destination.target });
+      if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes; search again shortly.`);
+    } finally { publishButton.disabled = false; publishButton.textContent = "Publish project to GitHub"; }
+  });
   const manual = section("Paste lyrics & import / export");
   const originalDraft = input("Original lyrics (one block per line), or timed LRC", manual, "", "textarea");
   button("Use pasted lyrics", manual, () => {
@@ -519,7 +607,9 @@
     } catch (error) { fail(error); } finally { importFile.value = ""; }
   });
   button("Export project JSON", manual, () => {
-    requireProject(); const text = JSON.stringify(C.validate(project), null, 2);
+    requireProject();
+    project.videoTitle = currentVideoTitle() || project.videoTitle;
+    const text = JSON.stringify(C.validate(project), null, 2);
     const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = el("a", null, root, { href: url, download: `karaoke-${videoId}.json` }); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
@@ -535,10 +625,11 @@
   });
   button("Add line", editor, () => { requireProject(); project.blocks.push(C.block()); selected = project.blocks.length - 1; renderRows(); save(); });
   const rows = el("div", null, editor, { id: "rows" });
-  const sources = section("Saved sources");
+  const sources = section("Source");
   function renderSources() {
     sources.querySelectorAll("a").forEach(node => node.remove());
-    for (const source of project?.sources || []) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
+    const source = project?.source;
+    if (source) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
   }
   function refresh() {
     updateSelectionWarning();
@@ -568,8 +659,14 @@
       for (const key of ["start", "end"]) {
         const field = input(key === "start" ? "Start (s)" : "End (s)", times, row[key] === null ? "" : Number((row[key] + project.offset).toFixed(3)), "number"); field.step = "0.001";
         field.addEventListener("change", () => { const previous = row[key];
-          row[key] = field.value === "" ? null : Number((Number(field.value) - project.offset).toFixed(3));
-          try { C.validate(project); save(); }
+          try {
+            if (key === "start") C.moveLineStart(project, row, field.value === "" ? null : Number(field.value));
+            else {
+              row.end = field.value === "" ? null : Number((Number(field.value) - project.offset).toFixed(3));
+              C.validate(project);
+            }
+            updateTimingFields(); renderRows(); save();
+          }
           catch (error) { row[key] = previous; renderRows(); fail(error); } });
       }
       const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; delete row.furigana; furiganaEditor?.remove(); save(); });
@@ -652,6 +749,7 @@
     const currentId = location.pathname === "/watch" ? new URL(location.href).searchParams.get("v") : null;
     if (currentId !== videoId) {
       videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); translationDraft.value = ""; translationWarning.hidden = true; originalDraft.value = ""; automaticStatus.textContent = ""; generation++;
+      catalogEntries = []; catalogSource = null; repositoryResults.replaceChildren(); repositoryQuery.value = ""; repositoryNotify("");
       query.value = ""; queryDirty = false; queryReady = false;
       const token = generation; refresh(); notify("");
       if (videoId && /^[\w-]{11}$/.test(videoId)) {

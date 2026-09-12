@@ -8,11 +8,49 @@ async function furiganaMatcher() {
   return furiganaMatcherPromise;
 }
 browser.runtime.onMessage.addListener(async (message, sender) => {
-  if (!sender.tab || !sender.url?.startsWith("https://www.youtube.com/")) return;
+  const settingsPage = typeof sender.url === "string" && typeof browser.runtime.getURL === "function" && sender.url.split('?')[0] === browser.runtime.getURL("src/settings.html");
+  if (!settingsPage && (!sender.tab || !sender.url?.startsWith("https://www.youtube.com/"))) return;
+  if (settingsPage && !["repository-settings", "save-repository-settings"].includes(message.type)) return;
   try {
     let data;
     const key = `project:${message.videoId}`;
     switch (message.type) {
+      case "repository-settings": {
+        const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
+        data = { ...KaraokeRepositories.settings(saved), hasToken: !!saved.token, ...(settingsPage ? { token: saved.token || "" } : {}) };
+        break;
+      }
+      case "save-repository-settings": {
+        if (!settingsPage) throw new Error("Open extension Settings to change repositories.");
+        const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
+        if (message.token !== undefined && (typeof message.token !== "string" || message.token.length > 1000 || /[\r\n]/.test(message.token))) throw new Error("Invalid GitHub token.");
+        const preferences = KaraokeRepositories.settings(message.settings);
+        const token = message.token === undefined ? saved.token || "" : message.token.trim();
+        await browser.storage.local.set({ repositorySettings: { ...preferences, token } });
+        data = { ...preferences, hasToken: !!token, token };
+        break;
+      }
+      case "repository-search":
+      case "repository-load":
+      case "repository-inspect":
+      case "repository-publish": {
+        const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
+        const preferences = KaraokeRepositories.settings(saved);
+        if (message.type === "repository-search") {
+          if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
+          data = await KaraokeRepositories.catalog(preferences.retrieval);
+        }
+        if (message.type === "repository-load") {
+          if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
+          data = await KaraokeRepositories.retrieve(preferences.retrieval, message.file, message.videoId);
+        }
+        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, saved.token, message.project, message.videoTitle), target: preferences.publishing };
+        if (message.type === "repository-publish") {
+          if (JSON.stringify(message.target) !== JSON.stringify(preferences.publishing)) throw new Error("Upload settings changed. Check the destination again.");
+          data = await KaraokeRepositories.publish(preferences.publishing, saved.token, message.project, message.sha, message.videoTitle);
+        }
+        break;
+      }
       case "furigana": {
         if (!Array.isArray(message.texts) || message.texts.length > 200 || message.texts.some(text => typeof text !== "string" || text.length > 20000)) throw new Error("Invalid furigana request.");
         const matcher = await furiganaMatcher();

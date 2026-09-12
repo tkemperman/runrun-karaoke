@@ -1,5 +1,7 @@
 # README mascot
 
+Release 1.2.0 (September 12, 2026) retains this artwork and its existing exports. No artwork was regenerated for this release.
+
 The README uses `assets/mascot.png`. The built-in image generation tool removed the baked-in checkerboard on September 10, 2026. The output was visually inspected and its PNG alpha channel verified to contain fully transparent background pixels.
 
 The current project name is **ルンルンKARAOKE**. This image is the repository README illustration; runtime icons are documented in [addon-icon-generation.md](addon-icon-generation.md). The source image and this provenance document are excluded from the extension ZIP.

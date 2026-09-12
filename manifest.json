@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "ルンルンKARAOKE",
-  "version": "1.1.1",
+  "name": "\u30eb\u30f3\u30eb\u30f3KARAOKE",
+  "version": "1.2.0",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
   "icons": {
     "16": "src/mascot-icon-transparent-16.png",
@@ -16,7 +16,9 @@
     "https://www.youtube.com/*",
     "https://lrclib.net/*",
     "https://api.openai.com/*",
-    "https://www.edrdg.org/*"
+    "https://www.edrdg.org/*",
+    "https://raw.githubusercontent.com/*",
+    "https://api.github.com/*"
   ],
   "background": {
     "scripts": [
@@ -25,6 +27,7 @@
       "src/search.js",
       "src/providers.js",
       "src/translation.js",
+      "src/repositories.js",
       "src/background.js"
     ]
   },
@@ -46,8 +49,8 @@
       "32": "src/mascot-icon-transparent-32.png",
       "48": "src/mascot-icon-transparent-48.png"
     },
-    "default_title": "ルンルンKARAOKE Settings",
-    "default_popup": "src/settings.html"
+    "default_title": "\u30eb\u30f3\u30eb\u30f3KARAOKE Settings",
+    "default_popup": "src/launcher.html"
   },
   "browser_specific_settings": {
     "gecko": {
@@ -63,7 +66,7 @@
     }
   },
   "options_ui": {
-    "page": "src/settings.html",
+    "page": "src/launcher.html",
     "open_in_tab": true
   },
   "commands": {
@@ -75,6 +78,9 @@
     }
   },
   "web_accessible_resources": [
-    "src/microphone.png"
+    "src/microphone.png",
+    "src/settings.html",
+    "src/settings.css",
+    "src/settings.js"
   ]
 }

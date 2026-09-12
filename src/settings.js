@@ -1,39 +1,53 @@
 "use strict";
-const shortcut = document.getElementById("shortcut");
-const font = document.getElementById("font-size");
-const position = document.getElementById("position");
-const next = document.getElementById("show-next");
 const status = document.getElementById("status");
-async function load() {
-  const commands = await browser.commands.getAll();
-  shortcut.value = commands.find(command => command.name === "toggle-karaoke")?.shortcut || "";
-  const { displaySettings: settings } = await browser.storage.local.get("displaySettings");
-  if (settings) { font.value = settings.fontSize; position.value = settings.position; next.checked = settings.showNext; }
+async function repositoryRequest(message) {
+  const result = await browser.runtime.sendMessage(message);
+  if (!result || result.error) throw new Error(result?.error || "Extension unavailable.");
+  return result.data;
 }
-load().catch(error => { status.textContent = error.message; });
-document.getElementById("shortcut-form").addEventListener("submit", async event => {
+function showRepositorySettings(saved) {
+  document.getElementById("github-token").value = saved.token || "";
+  for (const side of ["retrieval", "publishing"]) {
+    document.getElementById(`${side}-repo`).value = saved[side].repo;
+    document.getElementById(`${side}-branch`).value = saved[side].branch;
+  }
+}
+const form = document.getElementById("repository-form");
+const controls = [...form.querySelectorAll("input, button")];
+controls.forEach(control => { control.disabled = true; });
+repositoryRequest({ type: "repository-settings" }).then(saved => {
+  showRepositorySettings(saved);
+  controls.forEach(control => { control.disabled = false; });
+}).catch(error => { status.textContent = error.message; });
+
+let saveQueue = Promise.resolve();
+let revision = 0;
+function saveRepositorySettings() {
+  const currentRevision = ++revision;
+  const settings = {};
+  for (const side of ["retrieval", "publishing"]) settings[side] = {
+    repo: document.getElementById(`${side}-repo`).value,
+    branch: document.getElementById(`${side}-branch`).value
+  };
+  const token = document.getElementById("github-token").value.trim();
+  status.textContent = "";
+  // Preserve edit order and never replace newer field values with a save response.
+  saveQueue = saveQueue.catch(() => {}).then(() => repositoryRequest({ type: "save-repository-settings", settings, token }));
+  saveQueue.catch(error => {
+    if (currentRevision === revision) status.textContent = error.message;
+  });
+}
+form.addEventListener("change", saveRepositorySettings);
+form.addEventListener("submit", event => {
   event.preventDefault();
-  try {
-    await browser.commands.update({ name: "toggle-karaoke", shortcut: shortcut.value.trim() });
-    await load(); status.textContent = "Shortcut saved. Try it on a YouTube video.";
-  } catch (error) { status.textContent = `Could not save shortcut: ${error.message}`; }
+  saveRepositorySettings();
 });
-document.getElementById("reset-shortcut").addEventListener("click", async () => {
-  try { await browser.commands.reset("toggle-karaoke"); await load(); status.textContent = "Default shortcut restored."; }
-  catch (error) { status.textContent = error.message; }
-});
-document.getElementById("display-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  try {
-    await browser.storage.local.set({ displaySettings: { fontSize: Number(font.value), position: Number(position.value), showNext: next.checked } });
-    status.textContent = "Display settings saved.";
-  } catch (error) { status.textContent = error.message; }
+document.getElementById("clear-github-token").addEventListener("click", () => {
+  document.getElementById("github-token").value = "";
+  saveRepositorySettings();
 });
 
-document.getElementById("open-editor").addEventListener("click", async () => {
-  try {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    await browser.tabs.sendMessage(tab.id, { type: "open-editor" });
-    if (new URLSearchParams(location.search).get("tab") !== "1") window.close();
-  } catch (_) { status.textContent = "Open these settings from the extension icon on a YouTube video. Reload the video page if needed."; }
-});
+// Only layout information crosses the extension frame boundary.
+new ResizeObserver(() => {
+  parent.postMessage({ type: "karaoke-repository-height", height: Math.ceil(document.body.getBoundingClientRect().height) }, "https://www.youtube.com");
+}).observe(document.body);

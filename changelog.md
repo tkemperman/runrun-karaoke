@@ -1,6 +1,24 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.1.1 was released on September 12, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.2.0 was released on September 12, 2026.
+
+## 1.2.0 — Released 2026-09-12
+
+- Editing a line start automatically shifts its end and all later lines by the same amount, preserving durations, gaps and untimed values without confirmation.
+- Include the canonical YouTube `videoUrl` and original, unsanitized `videoTitle` in stored and exported projects. Derive the URL from `videoId` and capture the video title from the watch page.
+- Publish translations under sanitized YouTube video title and video-ID folders (title first for sorting), preserving Japanese and other Unicode letters while normalizing whitespace, punctuation and repeated hyphens. Keep older catalog paths readable.
+- Use project schema 3 with a single source object (provider and URL); migrate older source arrays using their last entry and replace the source when selecting another recording.
+- Show GitHub search, load and publication feedback directly beneath the repository action buttons.
+- Automatically save GitHub repository preferences and token changes; Clear token immediately removes the saved token.
+- Consolidate preferences in the in-video Settings panel, including GitHub fields styled like AI translation. Toolbar and Firefox preferences open the same panel; shortcut customization uses Firefox’s own menu.
+- Add separate GitHub retrieval and upload repositories and branches, with a locally stored upload token managed from Settings.
+- Search public catalogs by video, title or artist; load validated projects with replacement confirmation and stale-edit protection.
+- Publish complete projects through the GitHub Contents API with destination confirmation, Unicode encoding, and revision checks for updates.
+- Provide a standalone lyrics repository template with validation, deterministic catalog generation and an Action that retries catalog commits after concurrent pushes.
+- Rename the interface section to **AI translation** and update current usage instructions.
+- All 84 automated tests and JavaScript syntax checks pass, covering repositories, source migration, video metadata and cascading timing.
+- Migrate the existing GitHub catalog to video-title folders and add original video titles and URLs. Catalog generation was validated locally and changes pushed to GitHub. Full extension-driven publication, hosted Action and Firefox playback coverage remain outstanding.
+- Build `dist/runrun-karaoke-1.2.0.zip`; verify ZIP integrity, version metadata and runtime-only contents. The package is unsigned; packaging does not publish to an add-on store.
 
 ## 1.1.1 — Released 2026-09-12
 

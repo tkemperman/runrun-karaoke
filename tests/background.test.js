@@ -4,10 +4,10 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const C = require('../src/core.js');
 
-function harness(translation = {}, dictionary = {}) {
+function harness(translation = {}, dictionary = {}, repositories = require("../src/repositories.js")) {
   const saved = {}; const sent = []; let listener, command;
   const browser = {
-    runtime: { onMessage: { addListener(fn) { listener = fn; } } },
+    runtime: { getURL: path => `moz-extension://test/${path}`, onMessage: { addListener(fn) { listener = fn; } } },
     commands: { onCommand: { addListener(fn) { command = fn; } } },
     tabs: { query: async () => [{id: 7}], sendMessage: async (...args) => sent.push(args) },
     storage: { local: {
@@ -15,7 +15,7 @@ function harness(translation = {}, dictionary = {}) {
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {
@@ -36,10 +36,12 @@ test('activation command targets the active tab', async () => {
   const h = harness(); await h.command('toggle-karaoke');
   assert.equal(h.sent[0][0], 7); assert.equal(h.sent[0][1].type, 'toggle-enabled');
 });
-test('manifest assets exist and activation defaults to Alt+K with settings directly in the popup', () => {
+test('manifest assets exist and activation defaults to Alt+K with a launcher for the shared Settings panel', () => {
   const m = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
   assert.equal(m.commands['toggle-karaoke'].suggested_key.default, 'Alt+K');
-  assert.equal(m.browser_action.default_popup, 'src/settings.html');
+  assert.equal(m.browser_action.default_popup, 'src/launcher.html');
+  assert.equal(m.options_ui.page, m.browser_action.default_popup);
+  for (const path of m.web_accessible_resources) assert.ok(fs.existsSync(path), path);
   for (const path of [...m.background.scripts, ...m.content_scripts.flatMap(c => c.js), m.browser_action.default_popup, m.options_ui.page]) assert.ok(fs.existsSync(path), path);
 });
 for (const model of ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"]) test(`${model} preferences and key persist separately from projects and key is never returned`, async () => {
@@ -103,4 +105,36 @@ test('AI furigana uses the stored key and keeps the key out of results', async (
   assert.equal(received.apiKey, 'saved-key');
   assert.equal(result.data[0].furigana[0][1], 'うみ');
   assert.ok(!JSON.stringify(result).includes('saved-key'));
+});
+
+const settingsSender = { url: 'moz-extension://test/src/settings.html' };
+test('repository credentials can only be configured by settings and are never returned to YouTube', async () => {
+  const h = harness();
+  const settings = { retrieval: { repo: 'community/lyrics' }, publishing: { repo: 'me/lyrics' } };
+  assert.match((await h.request({ type: 'save-repository-settings', settings, token: 'secret' })).error, /Settings/);
+  assert.equal((await h.request({ type: 'save-repository-settings', settings, token: 'secret' }, settingsSender)).data.hasToken, true);
+  const loaded = (await h.request({ type: 'repository-settings' })).data;
+  assert.equal(loaded.retrieval.repo, 'community/lyrics');
+  assert.equal(loaded.token, undefined);
+  assert.equal((await h.request({ type: 'repository-settings' }, settingsSender)).data.token, 'secret');
+  assert.equal(loaded.hasToken, true);
+  await h.request({ type: 'save-repository-settings', settings }, settingsSender);
+  assert.equal(h.saved.repositorySettings.token, 'secret');
+  await h.request({ type: 'save-repository-settings', settings, token: '' }, settingsSender);
+  assert.equal(h.saved.repositorySettings.token, '');
+  assert.equal(h.saved.repositorySettings.retrieval.repo, 'community/lyrics');
+  assert.equal(await h.request({ type: 'repository-settings' }, {}), undefined);
+  assert.equal(await h.request({ type: 'repository-publish' }, settingsSender), undefined);
+});
+test('repository publication uses only saved credentials and rejects changed destinations', async () => {
+  const R = require('../src/repositories.js'); let received;
+  const h = harness({}, {}, { ...R, publish: async (...args) => { received = args; return { file: 'test' }; } });
+  const settings = R.settings({ publishing: { repo: 'me/lyrics' } });
+  await h.request({ type: 'save-repository-settings', settings, token: 'saved-secret' }, settingsSender);
+  const message = { type: 'repository-publish', target: settings.publishing, token: 'untrusted', project: C.project('abcdefghijk'), videoTitle: 'Actual video title', sha: null };
+  assert.equal((await h.request(message)).data.file, 'test');
+  assert.equal(received[1], 'saved-secret');
+  assert.equal(received[4], 'Actual video title');
+  assert.match((await h.request({ ...message, target: { repo: 'someone/else', branch: 'main' } })).error, /changed/);
+  assert.match((await h.request({ type: 'repository-load', source: { repo: 'stale/repo' } })).error, /changed/);
 });
