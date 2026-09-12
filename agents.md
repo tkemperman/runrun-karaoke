@@ -12,12 +12,19 @@ Use **AI translation** below **Manual translation** for optional OpenAI translat
 
 ## GitHub lyrics repositories
 
-- Keep a single configurable public retrieval repository and a separate upload repository, each with an explicit branch (default `main`). Network actions remain user-triggered.
+- Currently support a single configurable public retrieval repository and a separate upload repository, each with an explicit branch (default `main`). See the TODO below for planned multiple retrieval sources and publication destinations. Network actions remain user-triggered.
 - Manage the GitHub token only through extension Settings and background storage. Never return it to content scripts or put it in project payloads. Public reads are anonymous.
 - Upload paths use `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`; preserve Unicode letters and keep video ID as the matching key regardless of title changes.
 - Use the existing project schema and a separately versioned `index.json` catalog. Match exact video IDs for loading; title/artist filtering can discover other performances without reusing their timing automatically.
 - Confirm project replacement and publication destinations. Reject stale downloaded projects after local edits and use the reviewed GitHub file SHA to detect conflicting uploads.
 - The standalone `lyrics-repository-template/` includes the index Action. Keep its validator copies aligned with `src/core.js` and `src/repositories.js`; regression tests enforce this. Do not bundle the template in the extension archive.
+
+## TODO
+
+- [ ] Allow users to add multiple GitHub repositories as retrieval/search sources and multiple publication destinations, selecting a destination for each publication.
+- [ ] Include `tkemperman/runrun-karaoke-lyrics-catalog` as both a default search source and the default publication destination.
+- [ ] Automatically choose direct publication when configured credentials permit writing to the selected destination; otherwise switch to a pull request contribution flow through the user's fork. Show the selected destination and whether the action publishes directly or proposes a pull request before submission.
+- [ ] Support the missing-token case with a guided GitHub web contribution flow, including an export of the project and its destination path. Automatic fork, commit, and pull request creation still requires suitable GitHub authentication; a signed-in GitHub web session can support the manual flow without storing a token in the extension. Do not treat unrelated network failures as missing write permissions.
 
 ## Objective
 
