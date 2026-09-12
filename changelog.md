@@ -1,4 +1,4 @@
-# Versions
+# Changelog
 
 This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.1.0 was released on September 11, 2026.
 
