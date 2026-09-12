@@ -17,13 +17,13 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.1.0 was released on September 11, 2026**, adding local and AI furigana generation. Version 1.0.0 was released on September 10, 2026; see [versions.md](versions.md). The current local package is unsigned. The user confirmed successful AI furigana generation with a live API request on September 11, 2026. Full Firefox acceptance testing remains outstanding.
+Version **1.1.1 was released on September 12, 2026**, with untimed-lyrics timing fixes and yellow timing warnings. Version **1.1.0 was released on September 11, 2026**, adding local and AI furigana generation. Version 1.0.0 was released on September 10, 2026; see [changelog.md](changelog.md). The current local package is unsigned. The user confirmed successful AI furigana generation with a live API request on September 11, 2026. Full Firefox acceptance testing remains outstanding.
 
 Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, LRCLIB search, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
 ## Feature scope
 
-### Version 1.1.0
+### Version 1.1.1
 
 - Line-based karaoke overlay with translations directly underneath.
 - Lyrics lookup through LRCLIB, with recording selection and manual search corrections.
@@ -64,7 +64,7 @@ The downloaded page identifies the video as “FuwaMoco x Senchou Sing - Ahoy!�
 4. Press **Alt+K**, or click the microphone **Karaoke** button after the Transcript tools beside the channel information. If the Transcript extension is absent, the button appears at the end of the same owner row.
 5. Click the gear beside **Karaoke** to open the lyrics and timing editor; click it again to close the editor. Click the extension toolbar icon to open **Settings** directly. Change the activation shortcut, text size, or vertical position there. **Open lyrics editor for this video** opens the editor.
 
-New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. This preview uses Firefox Manifest V2, requires Firefox 140 or newer, and requires no build step.
+New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. This preview uses Firefox Manifest V2, requires Firefox 142 or newer, and requires no build step.
 
 Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. Projects and the saved key stay in extension-local storage except for these explicit requests and user-triggered exports. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
 
@@ -98,7 +98,7 @@ Automatic translation and general romaji-to-Japanese conversion are intentionall
 
 The gear toggles the editor open or closed. The Close button also closes it. **Display & timing** controls the timing delay (positive means later), text size, distance above the video bottom, **Show next line**, and **Show furigana**. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
 
-Use **Start at** to set when the first timed, non-empty lyric should appear, in `minutes:seconds` (for example, `0:33`). The delay is calculated automatically from its original timestamp. Alternatively, select a timed line in **Line editor** and click **Sync with video position** beside the field when that line should begin. This rounds the current video position to the nearest whole second and calculates the delay for the selected line. Both controls shift all lyrics together while preserving their relative timing; **Start at** continues to show the first lyric's adjusted start.
+Use **Start at** to set when the first lyric should appear, in `minutes:seconds` (for example, `0:33`). With untimed lyrics, this sets the first non-empty line’s start. Alternatively, select a line in **Line editor** and click **Sync with video position** as it begins. Sync sets an untimed line’s start or adjusts the global delay for an already timed line, preserving relative timing and milliseconds. A yellow warning appears when selecting untimed lyrics and remains above the editor while any lyric lines still need timing. Mark each remaining line manually; setting the first start does not automatically time the rest of the song.
 
 **Start (s)** and **End (s)** in Line editor show video times including the delay and update when it changes. Editing these values converts them back to stored timestamps automatically. For example, a first lyric at `15.27` seconds with **Start at** set to `0:33` produces a delay of `17.73` seconds and an editor start of `33`. Synchronizing does not turn karaoke on; activate it with **Karaoke** or **Alt+K** to see the overlay.
 
@@ -146,10 +146,10 @@ The furigana dictionary button becomes **Re-generate furigana (dictionary)** whe
 
 ## Development
 
-See [agents.md](agents.md) for the architecture, implementation sequence, and acceptance criteria. See [versions.md](versions.md) for release status and planned version scope.
+See [agents.md](agents.md) for the architecture, implementation sequence, and acceptance criteria. See [changelog.md](changelog.md) for release status and planned version scope.
 
 Use English for code comments, identifiers, documentation, commit messages, and default interface text. Lyrics, translations, artist names, and song titles retain their original languages.
 
 Run `npm test` for the core, search, translation, furigana, and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.1.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes only the manifest and runtime assets. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.1.1.zip`, an unsigned extension package. Packaging uses Python 3 and includes only the manifest and runtime assets. The packaging command does not sign or publish the add-on.

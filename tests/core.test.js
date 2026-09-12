@@ -78,3 +78,31 @@ test('offset aligns lyrics with the exact video start and end', () => {
   assert.equal(C.activeBlock(rows, 25 + delay, delay), null);
   assert.equal(C.activeBlock(rows, 5, 5 - rows[0].start), rows[0]);
 });
+
+test('sync initializes untimed lyrics and preserves existing timing and fractional video position', () => {
+  const p = C.project('h3chCOV_phw');
+  p.blocks = [C.block('First'), C.block('Second')];
+  C.syncLine(p, p.blocks[0], 33.125);
+  assert.equal(p.blocks[0].start, 33.125);
+  assert.equal(p.blocks[1].start, null);
+  assert.equal(p.offset, 0);
+  C.syncLine(p, p.blocks[0], 35.375);
+  assert.equal(p.offset, 2.25);
+  C.syncLine(p, p.blocks[1], 40.5);
+  assert.equal(p.blocks[1].start + p.offset, 40.5);
+  assert.equal(p.blocks[0].start + p.offset, 35.375);
+  C.syncLine(p, p.blocks[1], 42.625);
+  assert.equal(p.blocks[0].start + p.offset, 37.5);
+  assert.equal(p.blocks[1].start + p.offset, 42.625);
+});
+
+test('sync rejects invalid times without changing the project', () => {
+  const p = C.project('h3chCOV_phw');
+  p.blocks = [C.block('First'), C.block('Second', 10)];
+  const before = JSON.stringify(p);
+  assert.throws(() => C.syncLine(p, p.blocks[0], -1), /Times/);
+  assert.throws(() => C.syncLine(p, p.blocks[1], 100000), /offset/);
+  assert.throws(() => C.syncLine(p, p.blocks[0], NaN), /Invalid/);
+  assert.throws(() => C.syncLine(p, undefined, 33), /Load lyrics/);
+  assert.equal(JSON.stringify(p), before);
+});

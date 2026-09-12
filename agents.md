@@ -26,7 +26,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 
 - A content script manages the overlay and follows the YouTube player's playback position.
 - A background component handles external source requests and local storage. Request only necessary extension permissions and access to source hosts in use.
-- Keep Firefox's `data_collection_permissions` declaration aligned with outgoing data: LRCLIB search terms, website content used in search, translation and AI furigana generation, and the OpenAI authentication key. The current manifest declares these as required installation consent; network features remain user-triggered. Require Firefox 140 or newer for built-in consent unless an older-version consent flow is implemented.
+- Keep Firefox's `data_collection_permissions` declaration aligned with outgoing data: LRCLIB search terms, website content used in search, translation and AI furigana generation, and the OpenAI authentication key. The current manifest declares these as required installation consent; network features remain user-triggered. Require Firefox 142 or newer so the minimum version supports built-in consent on both desktop and Android. Do not declare Android compatibility without verifying the Android interface and playback workflow.
 - Separate rendering, player integration, source providers, translation mapping, and timing editing.
 - Use the player's current playback position as the clock to avoid accumulated drift when pausing, seeking, or changing playback speed.
 - Store customized performances by YouTube video ID. Keep retrieved source data separate from user corrections so refreshing a source does not overwrite edits.
@@ -73,8 +73,8 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
    - The extension toolbar icon opens Settings directly. Do not add an intermediate on/off menu.
    - Keep button and shortcut state synchronized. New tabs start with karaoke off; activation is per tab.
 6. Provide an earlier/later timing offset saved per video.
-   - **Start at** shows the earliest timed, non-empty lyric's video start in minutes:seconds. Editing it calculates the global offset from the stored start.
-   - Place **Sync with video position** beside the Start at field, separated by **or** and vertically aligned with the input. Sync anchors the selected timed line to the current video position rounded to whole seconds. Preserve relative timing; do not round the calculated offset, which can require fractions.
+   - **Start at** shows the earliest timed, non-empty lyric's video start in minutes:seconds. Editing it calculates the global offset from the stored start. If no lyric is timed, it sets the first non-empty line’s start. Show yellow warnings for untimed recording selections and remaining untimed lyrics.
+   - Place **Sync with video position** beside the Start at field, separated by **or** and vertically aligned with the input. Sync anchors the selected timed line to the current video position, preserving milliseconds and relative timing. For an untimed selected line, set its start without shifting other lines.
    - Refresh Line editor's displayed start/end video times after offset changes. Synchronization does not enable karaoke automatically.
 7. Build a timing editor: during playback, a key marks the start of the next line. Allow subsequent start/end edits and inserting, deleting, repeating, and moving blocks. Do not trigger shortcuts while typing in text fields.
 8. Allow lyrics and translation edits without re-entering timing.
@@ -99,7 +99,7 @@ Build a Firefox add-on that displays synchronized lyrics alongside YouTube video
 - Navigating between YouTube videos without a page reload clears old content and loads the appropriate project.
 - Reloading preserves text corrections, translation mappings, and timing.
 - Search edits survive reloads within their video; navigating to a video without a saved query picks up its title.
-- Start at and selected-line synchronization calculate the offset correctly, refresh displayed editor times, and activate lyrics at the exact adjusted start when karaoke is enabled. Selected-line sync uses whole video seconds.
+- Start at and selected-line synchronization calculate the offset correctly, refresh displayed editor times, and activate lyrics at the exact adjusted start when karaoke is enabled. Selected-line sync preserves milliseconds and also initializes untimed lines.
 - Export followed by import preserves both languages, block order, sources, timestamps, furigana segments, and visibility. Schema 1 imports remain supported.
 - Both furigana methods support review in Line editor and song-wide term correction. Verify spinner/disabled state, replacement cancellation, stale-result protection, and current/next-line ruby in Firefox.
 - Apply translation skips blank lines, warns on different counts, offers Apply anyway and Cancel, confirms replacement, and preserves original lyrics and timing.
@@ -166,7 +166,7 @@ Derive timing from the actual performance using existing Japanese lyrics as the 
 
 ## Working practices
 
-- The current version is `1.1.0` (released September 11, 2026); `1.0.0` was released on September 10, 2026. Keep manifest, package metadata, package instructions, and release notes consistent when the user requests a version bump. The user will commit when the add-on works sufficiently well; do not create commits unless explicitly asked. A release does not imply that all acceptance criteria have passed.
+- The current version is `1.1.1` (released September 12, 2026); `1.1.0` was released September 11, 2026; `1.0.0` was released on September 10, 2026. Treat every requested version bump as a release by default, dated on the day of the bump, unless the user explicitly specifies otherwise. Do not label it "Local build" or ask for separate release confirmation. Keep manifest, package metadata, package instructions, and release notes consistent. Release status does not imply that the add-on has been signed or published to an external service. The user will commit when the add-on works sufficiently well; do not create commits unless explicitly asked. A release does not imply that all acceptance criteria have passed.
 
 - Complete the outstanding line-based karaoke acceptance checks before implementing version 2.0.0 audio analysis.
 - Verify source availability and the reference video during implementation. Do not claim successful synchronization without checking the actual performance.

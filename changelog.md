@@ -1,6 +1,15 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.1.0 was released on September 11, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.1.1 was released on September 12, 2026.
+
+## 1.1.1 — Released 2026-09-12
+
+- Raise the minimum Firefox version to 142 to resolve the Android compatibility warning for `data_collection_permissions`, without declaring untested Android support.
+
+- Allow **Start at** to initialize the first untimed lyric and **Sync with video position** to initialize the selected untimed line. Existing timed lines still synchronize using the global delay.
+- Preserve milliseconds when synchronizing with video playback.
+- Show a yellow warning when selecting untimed lyrics and while loaded lyric lines still need timing, explaining that remaining lines must be marked manually.
+- The user confirmed the timing fix works. The timing regression suite passed as part of all 58 automated tests; JavaScript syntax checks passed.
 
 ## 1.1.0 — Released 2026-09-11
 

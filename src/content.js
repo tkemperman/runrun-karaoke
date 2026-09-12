@@ -98,6 +98,9 @@
   button("Close", header, () => { panel.hidden = true; });
   const title = el("p", "Open a YouTube video to begin.", panel, { class: "muted" });
   const status = el("p", "", panel, { id: "status", role: "status" });
+  const untimedMessage = "These lyrics have no timing. Set the first line with Start at or Sync, then mark each remaining line in the Line editor as the vocals begin. Setting the first line does not automatically time the rest of the song.";
+  const timingWarning = el("p", untimedMessage, panel, { class: "muted warning", role: "status" });
+  timingWarning.hidden = true;
   function notify(text, error = false) { status.textContent = text; status.className = error ? "error" : ""; }
   function fail(error) { notify(error.message || String(error), true); }
   let project = null, videoId = null, selected = 0, generation = 0;
@@ -137,14 +140,12 @@
   startAt.addEventListener("change", () => {
     try {
       requireProject();
-      const first = firstTimedLyric();
-      if (!first) throw new Error("Set a start time for the first lyric line first.");
+      const first = firstTimedLyric() || project.blocks.find(row => row.text.trim());
+      if (!first) throw new Error("Load lyrics or add a lyric line first.");
       const match = startAt.value.trim().match(/^(-?)(\d+):([0-5]\d)(?:\.(\d{1,3}))?$/);
       if (!match) throw new Error("Use minutes:seconds for Start at, for example 0:33 or 1:05.5.");
       const seconds = (Number(match[2]) * 60 + Number(match[3]) + Number(`0.${match[4] || 0}`)) * (match[1] ? -1 : 1);
-      const delay = seconds - first.start;
-      if (Math.abs(delay) > 86400) throw new Error("Invalid timing offset.");
-      project.offset = delay;
+      C.syncLine(project, first, seconds);
       renderRows();
       save();
     } catch (error) { updateTimingFields(); fail(error); }
@@ -153,9 +154,14 @@
     return project?.blocks.filter(row => row.start !== null && row.text.trim()).reduce((first, row) => !first || row.start < first.start ? row : first, null);
   }
   function updateTimingFields() {
+    const untimed = project?.blocks.filter(row => row.text.trim() && row.start === null).length || 0;
+    timingWarning.hidden = untimed === 0;
+    timingWarning.textContent = firstTimedLyric()
+      ? `${untimed} lyric line${untimed === 1 ? " still needs" : "s still need"} timing. Mark each remaining line in the Line editor as the vocals begin. Sync does not automatically time the rest of the song.`
+      : untimedMessage;
     offset.value = project?.offset || 0;
     const first = firstTimedLyric();
-    startAt.disabled = !first;
+    startAt.disabled = !project;
     if (!first) { startAt.value = ""; return; }
     const milliseconds = Math.round((first.start + project.offset) * 1000);
     const absolute = Math.abs(milliseconds);
@@ -167,15 +173,14 @@
     requireProject();
     const row = project.blocks[selected];
     if (!row) throw new Error("Select a line in the Line editor first.");
-    if (row.start === null) throw new Error("Set a start time for the selected line first.");
     const media = video();
     if (!media || document.querySelector("#movie_player.ad-showing")) throw new Error("Wait for the main video (not an advertisement).");
-    project.offset = Math.round(media.currentTime) - row.start;
+    C.syncLine(project, row, media.currentTime);
     offset.value = project.offset;
     renderRows();
     save();
   }).title = "Sync selected line to current video position";
-  el("p", "Select a timed line in the Line editor, then click Sync as that line begins in the video. This adjusts the delay for all lyrics while preserving their relative timing.", display, { class: "muted" });
+  el("p", "Start at sets when the first lyric begins. Select a line in the Line editor and click Sync as it begins in the video. For a timed line, this shifts all lyrics together; for an untimed line, it sets that line’s start. Lyrics without timing still need each remaining line marked in the Line editor.", display, { class: "muted" });
   const fontSize = input("Text size", display, "30", "range"); fontSize.min = "18"; fontSize.max = "60";
   const position = input("Distance above bottom of video (%)", display, "13", "range"); position.min = "5"; position.max = "60";
   browser.storage.local.get("displaySettings").then(({ displaySettings: settings }) => {
@@ -313,9 +318,17 @@
     if (currentGeneration !== generation) return;
     results = found; resultList.replaceChildren();
     results.forEach((row, index) => el("option", `${row.artist} — ${row.title} (${Math.round(row.duration || 0)}s; ${row.syncedLyrics ? "timed" : "untimed"})`, resultList, { value: String(index) }));
+    updateSelectionWarning();
     notify(results.length ? "Choose a recording. Live timing may need correction." : "No results. Try another title, or paste lyrics.");
   });
   const resultList = el("select", null, searchSection, { "aria-label": "Lyrics recordings", style: "width:100%;margin:8px 0" });
+  const selectionWarning = el("p", untimedMessage, searchSection, { class: "muted warning", role: "status" });
+  selectionWarning.hidden = true;
+  function updateSelectionWarning() {
+    const source = results[Number(resultList.value)];
+    selectionWarning.hidden = !source || !!source.syncedLyrics;
+  }
+  resultList.addEventListener("change", updateSelectionWarning);
   button("Use selected lyrics", searchSection, () => {
     requireProject(); const source = results[Number(resultList.value)]; if (!source) throw new Error("Search and select a recording first.");
     const blocks = source.syncedLyrics ? C.parseLrc(source.syncedLyrics) : source.plainLyrics.split(/\r?\n/).filter(line => line.trim()).map(line => C.block(line));
@@ -528,6 +541,7 @@
     for (const source of project?.sources || []) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
   }
   function refresh() {
+    updateSelectionWarning();
     updateFuriganaButton();
     updateTimingFields();
     showFurigana.checked = !!project?.furiganaEnabled;

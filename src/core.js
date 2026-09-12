@@ -129,7 +129,16 @@
     }
     return targets.slice(0, lines.length).map((row, index) => ({ row, text: lines[index] }));
   }
-  const api = { replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, activeBlock, stamp, matchTranslation };
+  function syncLine(value, row, seconds) {
+    if (!row || !value.blocks.includes(row)) throw new Error("Load lyrics and select a line first.");
+    if (!Number.isFinite(seconds)) throw new Error("Invalid start time.");
+    const previousStart = row.start, previousOffset = value.offset;
+    if (row.start === null) row.start = Number((seconds - value.offset).toFixed(3));
+    else value.offset = Number((seconds - row.start).toFixed(3));
+    try { validate(value); }
+    catch (error) { row.start = previousStart; value.offset = previousOffset; throw error; }
+  }
+  const api = { replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, activeBlock, stamp, matchTranslation, syncLine };
   root.KaraokeCore = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);
