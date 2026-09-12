@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "\u30eb\u30f3\u30eb\u30f3KARAOKE",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
   "icons": {
     "16": "src/mascot-icon-transparent-16.png",
