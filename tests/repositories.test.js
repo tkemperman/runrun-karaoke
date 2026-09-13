@@ -6,6 +6,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const C = require('../src/core.js');
 const R = require('../src/repositories.js');
+const githubUser = { login: 'tkemperman', id: 123, email: 'private@example.com' };
 const source = { repo: 'owner/lyrics', branch: 'main' };
 function project() {
   const p = C.project('abcdefghijk', '海の歌');
@@ -54,16 +55,21 @@ test('invalid catalogs, malformed JSON and mismatching projects fail without cha
 });
 test('new Unicode projects publish once, exclude extra metadata, and use authenticated Contents API', async t => {
   const p = project(); p.token = 'accidental-secret'; p.blocks[0].settings = { token:'accidental-secret' };
-  const calls = mock(t,[{status:404},{data:{content:{}}}]);
+  const calls = mock(t,[{status:404},{data:githubUser},{data:{content:{}}}]);
   const destination = await R.inspect(source,'saved-token',p,'Live 海の歌');
   assert.equal(destination.sha,null);
   assert.equal(destination.file, 'translations/live-海の歌-abcdefghijk/en.json');
   assert.ok(calls[0].url.includes('live-%E6%B5%B7%E3%81%AE%E6%AD%8C-abcdefghijk/en.json'));
   await R.publish(source,'saved-token',p,destination.sha,'Live 海の歌');
-  const put = calls[1]; assert.equal(put.options.method,'PUT');
+  const put = calls[2]; assert.equal(put.options.method,'PUT');
   assert.equal(put.url, calls[0].url.split('?')[0]);
   assert.equal(put.options.headers.Authorization,'Bearer saved-token');
   const body = JSON.parse(put.options.body);
+  assert.deepEqual(body.author, { name: 'tkemperman', email: '123+tkemperman@users.noreply.github.com' });
+  assert.deepEqual(body.committer, body.author);
+  assert.equal(calls[1].url, 'https://api.github.com/user');
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer saved-token');
+  assert.ok(!put.options.body.includes(githubUser.email));
   assert.equal(body.branch,'main'); assert.equal(body.sha,undefined);
   const decoded = Buffer.from(body.content,'base64').toString('utf8');
   assert.ok(!decoded.includes('accidental-secret'));
@@ -71,11 +77,11 @@ test('new Unicode projects publish once, exclude extra metadata, and use authent
 });
 test('updates carry the reviewed SHA; conflicts and API errors never expose response bodies', async t => {
   const sha = 'a'.repeat(40), p = project();
-  const calls = mock(t,[{data:{type:'file',sha}},{status:409,text:'sensitive response saved-token'}]);
+  const calls = mock(t,[{data:{type:'file',sha}},{data:githubUser},{status:409,text:'sensitive response saved-token'}]);
   const destination = await R.inspect(source,'saved-token',p,'Live 海の歌');
   await assert.rejects(R.publish(source,'saved-token',p,destination.sha,'Live 海の歌'), error => /409/.test(error.message) && !/saved-token|sensitive/.test(error.message));
-  assert.equal(JSON.parse(calls[1].options.body).sha,sha);
-  assert.equal(calls.length,2);
+  assert.equal(JSON.parse(calls[2].options.body).sha,sha);
+  assert.equal(calls.length,3);
 });
 test('invalid projects, tokens and file revisions fail before network access', async t => {
   const calls = mock(t,[]), p = project();
@@ -172,11 +178,31 @@ test('repository export adds a canonical video URL to existing projects', () => 
 
 test('video titles retain punctuation and case in JSON while folder names are sanitized', async t => {
   const p = project(), videoTitle = '【Hololive EN / Gawr Gura】Miki Matsubara - Stay With Me';
-  const calls = mock(t, [{data:{}}]);
+  const calls = mock(t, [{data:githubUser}, {data:{}}]);
   const result = await R.publish(source, 'token', p, null, videoTitle);
   assert.equal(result.file, 'translations/hololive-en-gawr-gura-miki-matsubara-stay-with-me-abcdefghijk/en.json');
-  const payload = JSON.parse(Buffer.from(JSON.parse(calls[0].options.body).content, 'base64').toString('utf8'));
+  const payload = JSON.parse(Buffer.from(JSON.parse(calls[1].options.body).content, 'base64').toString('utf8'));
   assert.equal(payload.videoTitle, videoTitle);
   assert.equal(payload.title, p.title);
   assert.equal(payload.videoUrl, 'https://www.youtube.com/watch?v=abcdefghijk');
+});
+
+
+test('other uploaders use their own noreply identity, never their account email', async t => {
+  const calls = mock(t, [{data:{login:'another-user',id:456,email:'private@example.com'}},{data:{}}]);
+  await R.publish(source, 'token', project(), null, 'Video title');
+  const body = JSON.parse(calls[1].options.body);
+  assert.deepEqual(body.author, {name:'another-user',email:'456+another-user@users.noreply.github.com'});
+  assert.deepEqual(body.committer, body.author);
+  assert.ok(!calls[1].options.body.includes('private@example.com'));
+});
+
+test('identity lookup errors abort publication without falling back to account email', async t => {
+  for (const response of [{status:403}, {data:{}}, {data:{login:'user',id:0}}]) {
+    const calls = mock(t, [response]);
+    await assert.rejects(R.publish(source, 'token', project(), null, 'Video title'));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.method, undefined);
+    t.mock.restoreAll();
+  }
 });
