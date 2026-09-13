@@ -1,6 +1,6 @@
 # ルンルンKARAOKE Lyrics Repository
 
-Set up your own public lyrics and translation repository for [ルンルンKARAOKE](https://github.com/tkemperman/runrun-karaoke).
+Set up your own public lyrics and translation repository for ルンルンKARAOKE.
 This template contains no lyrics.
 
 ## Setup
