@@ -11,7 +11,7 @@ This template contains no lyrics.
 
 3. **Create a GitHub token.** Open [Fine-grained personal access tokens](https://github.com/settings/personal-access-tokens) and click **Generate new token**. Give it a name and expiration date, select your account as **Resource owner**, and choose **Only select repositories → your new repository**. Under **Repository permissions**, set **Contents → Read and write**, then generate and copy the token. [GitHub's token guide](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) has more detail.
 
-4. **Configure ルンルンKARAOKE.** Open the extension's **Settings → Lyrics repositories · GitHub** and enter:
+4. **Configure ルンルンKARAOKE.** Enable developer mode from the YouTube page console with `localStorage.setItem("runrunKaraoke.developerMode", "true")` and reload. Open the extension's **Settings → Lyrics repositories · GitHub** and enter:
 
    | Field | Value |
    | --- | --- |
@@ -24,6 +24,8 @@ This template contains no lyrics.
    Settings save automatically when you leave a field. Keep the token private; never add it to the repository.
 
 5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish project to GitHub** to upload your project. After the repository's Action finishes, use **Search repository** to find and load it.
+
+The Action generates `index.json` from the project files. The extension searches that index by `videoId` and loads the recorded file path; it does not scan folder names. Renaming a YouTube video does not prevent existing projects from being found. The downloaded project’s `videoId` is also validated before loading.
 
 ## License
 

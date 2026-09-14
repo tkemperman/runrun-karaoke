@@ -1,4 +1,6 @@
 "use strict";
+// Temporary local testing switch: ignore the GitHub token without deleting it.
+const DISABLE_GITHUB_TOKEN = true;
 let furiganaMatcherPromise;
 async function furiganaMatcher() {
   if (!furiganaMatcherPromise) furiganaMatcherPromise = (async () => {
@@ -15,9 +17,28 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     let data;
     const key = `project:${message.videoId}`;
     switch (message.type) {
+      case "load-interface":
+        if (sender.frameId && sender.frameId !== 0) throw new Error("Open karaoke in the main YouTube page.");
+        for (const [file, symbol] of [["src/core.js", "KaraokeCore"], ["src/tutorial.js", "KaraokeTutorial"], ["src/content.js", "KaraokeUI"]]) {
+          const [loaded] = await browser.tabs.executeScript(sender.tab.id, { code: `typeof ${symbol} !== "undefined"`, frameId: 0 });
+          if (!loaded) await browser.tabs.executeScript(sender.tab.id, { file, frameId: 0 });
+        }
+        data = true;
+        break;
+      case "catalog-search":
+      case "catalog-load": {
+        if (!/^[\w-]{11}$/.test(message.videoId)) throw new Error("Invalid video ID.");
+        const source = { repo: "tkemperman/runrun-karaoke-lyrics-catalog", branch: "main" };
+        if (message.type === "catalog-search") {
+          data = (await KaraokeRepositories.catalog(source)).filter(entry => entry.videoId === message.videoId);
+        } else {
+          data = await KaraokeRepositories.retrieve(source, message.file, message.videoId);
+        }
+        break;
+      }
       case "repository-settings": {
         const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
-        data = { ...KaraokeRepositories.settings(saved), hasToken: !!saved.token, ...(settingsPage ? { token: saved.token || "" } : {}) };
+        data = { ...KaraokeRepositories.settings(saved), hasToken: !!saved.token };
         break;
       }
       case "save-repository-settings": {
@@ -27,7 +48,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         const preferences = KaraokeRepositories.settings(message.settings);
         const token = message.token === undefined ? saved.token || "" : message.token.trim();
         await browser.storage.local.set({ repositorySettings: { ...preferences, token } });
-        data = { ...preferences, hasToken: !!token, token };
+        data = { ...preferences, hasToken: !!token };
         break;
       }
       case "repository-search":
@@ -44,10 +65,10 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
           data = await KaraokeRepositories.retrieve(preferences.retrieval, message.file, message.videoId);
         }
-        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, saved.token, message.project, message.videoTitle), target: preferences.publishing };
+        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, DISABLE_GITHUB_TOKEN ? "" : saved.token, message.project, message.videoTitle), target: preferences.publishing };
         if (message.type === "repository-publish") {
           if (JSON.stringify(message.target) !== JSON.stringify(preferences.publishing)) throw new Error("Upload settings changed. Check the destination again.");
-          data = await KaraokeRepositories.publish(preferences.publishing, saved.token, message.project, message.sha, message.videoTitle);
+          data = await KaraokeRepositories.publish(preferences.publishing, DISABLE_GITHUB_TOKEN ? "" : saved.token, message.project, message.sha, message.videoTitle);
         }
         break;
       }
@@ -101,7 +122,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   } catch (error) { return { error: error.message }; }
 });
 browser.commands.onCommand.addListener(async command => {
-  if (command !== "toggle-karaoke") return;
+  const type = { "toggle-karaoke": "toggle-enabled", "toggle-settings": "toggle-editor" }[command];
+  if (!type) return;
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id) browser.tabs.sendMessage(tab.id, { type: "toggle-enabled" }).catch(() => {});
+  if (tab?.id) browser.tabs.sendMessage(tab.id, { type }).catch(() => {});
 });

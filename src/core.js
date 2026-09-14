@@ -113,6 +113,35 @@
     // Blank timestamped lines remain boundaries for instrumental gaps.
     return entries.map((row, i) => ({ ...row, end: entries.slice(i + 1).find(next => next.start > row.start)?.start ?? null }));
   }
+  function importLyrics(text) {
+    if (/\[\d+:[0-5]\d/.test(text)) return parseLrc(text);
+    const rows = text.replace(/^\uFEFF/, "").split(/\r?\n/)
+      .filter(line => line.trim() && !/^\[[a-z]+:.*\]$/i.test(line.trim())).map(line => block(line));
+    if (!rows.length) throw new Error("No lyrics found.");
+    return rows;
+  }
+  function exportLrc(value, timed = true) {
+    const project = validate(value);
+    if (!project.blocks.length) throw new Error("Add lyrics first.");
+    const text = row => row.text.replace(/[\r\n]+/g, " ");
+    if (!timed) return project.blocks.map(text).join("\n") + "\n";
+    if (project.blocks.some(row => row.start === null || row.start + project.offset < 0)) {
+      throw new Error("Every line needs a non-negative video start time. Mark untimed lines or export untimed LRC.");
+    }
+    const timestamp = seconds => {
+      const ms = Math.round(seconds * 1000);
+      return `[${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}]`;
+    };
+    const rows = [...project.blocks].sort((a, b) => a.start - b.start);
+    const lines = [];
+    rows.forEach((row, index) => {
+      lines.push(timestamp(row.start + project.offset) + text(row));
+      if (row.end !== null && (!rows[index + 1] || row.end < rows[index + 1].start)) {
+        lines.push(timestamp(row.end + project.offset));
+      }
+    });
+    return lines.join("\n") + "\n";
+  }
   function activeBlock(rows, videoTime, offset = 0) {
     let active = null;
     for (const row of rows) {
@@ -168,7 +197,7 @@
     try { validate(value); }
     catch (error) { row.start = previousStart; value.offset = previousOffset; throw error; }
   }
-  const api = { replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
+  const api = { replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, importLyrics, exportLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
   root.KaraokeCore = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

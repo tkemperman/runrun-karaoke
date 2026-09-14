@@ -8,7 +8,7 @@ A Firefox add-on in development for synchronized lyrics on YouTube, with the ori
 
 ## Contact
 
-Thomas Kemperman — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com)
+Thomas Kemperman — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com?subject=%E3%83%AB%E3%83%B3%E3%83%AB%E3%83%B3KARAOKE)
 
 ## License
 
@@ -17,13 +17,15 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.2.0 was released on September 12, 2026**, adding GitHub lyrics repositories, project schema 3 with a single source and original YouTube metadata, and automatic timing shifts for following lines. This release follows 1.1.1; see [changelog.md](changelog.md) for the full history. The release package is unsigned. Full Firefox acceptance testing remains outstanding.
+Version **1.3.0 was released on September 14, 2026**, simplifying lyrics discovery, timing, line editing and the tutorial. See [changelog.md](changelog.md) for the release history. The release package is unsigned; full Firefox acceptance testing remains outstanding.
 
 Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, LRCLIB search, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
 ## GitHub lyrics repositories
 
-Version 1.2.0 supports separate public retrieval and authenticated upload repositories. In extension **Settings → Lyrics repositories · GitHub**, enter each `owner/repository` (or GitHub URL) and branch. Save a fine-grained GitHub token restricted to the upload repository with **Contents: read and write**. The token is stored locally, kept inside an isolated extension frame, and never included in published projects. The saved token appears masked in the password field. Repository fields and the token save automatically when changed (on leaving the field). **Clear token** immediately deletes the stored token.
+This developer-only section is hidden by default and excluded from the tutorial. To show it, run `localStorage.setItem("runrunKaraoke.developerMode", "true")` in the YouTube page console and reload. Set the same key to `"false"` and reload to hide it again. Hiding preserves all repository settings and the saved token.
+
+Developer mode supports separate public retrieval and authenticated upload repositories. In extension **Settings → Lyrics repositories · GitHub**, enter each `owner/repository` (or GitHub URL) and branch. Save a fine-grained GitHub token restricted to the upload repository with **Contents: read and write**. The token is stored locally, kept inside an isolated extension frame, and never included in published projects. The input is cleared when submitted; saved tokens are never returned to the interface. A placeholder indicates whether a token is saved. Repository fields and the token save automatically when changed (on leaving the field). **Clear token** immediately deletes the stored token.
 
 Copy [lyrics-repository-template](lyrics-repository-template/README.md), including its `.github` directory, to the root of your lyrics repository. It provides the catalog format, validation script and GitHub Action. Initialize the branch and enable Actions with permission to write contents before uploading. The add-on does not create repositories or install workflows remotely.
 
@@ -35,17 +37,17 @@ In the lyrics editor, open **Lyrics repositories · GitHub**:
 
 Repository folder titles come from the current YouTube video, independently of the lyric/translation title. Folder titles use lowercase Unicode letters and numbers (including Japanese), with whitespace and punctuation converted to single hyphens. Repeated hyphens collapse and leading/trailing hyphens are removed. Slugs are limited to 220 UTF-8 bytes; empty slugs use `untitled`. The YouTube ID keeps its original case. Matching and loading use the exact YouTube video ID, independently of the title or folder name. Existing ID-only catalog paths remain readable. Changing the YouTube video title changes its upload path.
 
-The Action regenerates `index.json` after uploads. Search again after it finishes; raw GitHub caching can delay visibility. This version supports one retrieval source and one upload destination, with no automatic background requests. The API integration follows [GitHub's repository contents API](https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10).
+The Action regenerates `index.json` after uploads. Search again after it finishes; raw GitHub caching can delay visibility. This version supports one retrieval source and one upload destination, with user-triggered developer actions. Separately, opening Settings checks the built-in public catalog. The current testing switch DISABLE_GITHUB_TOKEN in src/background.js disables authenticated publication without deleting the saved token. The API integration follows [GitHub's repository contents API](https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10).
 
-Validation: 84 automated tests and JavaScript syntax checks pass. Existing GitHub catalog projects have been migrated and their index validated locally. Full Firefox interaction, extension-driven authenticated publication and hosted Action verification remain outstanding.
+Validation for the current release is recorded in the changelog. Existing GitHub catalog projects have been migrated and their index validated locally. Full Firefox interaction, extension-driven authenticated publication and hosted Action verification remain outstanding.
 
 ## Feature scope
 
-### Version 1.2.0
+### Version 1.3.0
 
 - Line-based karaoke overlay with translations directly underneath.
 - Lyrics lookup through LRCLIB, with recording selection and manual search corrections.
-- Manual lyrics and translation entry, LRC import, and translation mapping.
+- Per-line lyrics and translation entry, project JSON import/export, and timed or untimed LRC import/export.
 - A timing editor for live arrangements, repeated lines, and instrumental breaks.
 - Per-video timing offsets and local project storage.
 - JSON import/export preserving text, translations, the current source, YouTube metadata, timing, furigana readings, and visibility.
@@ -64,9 +66,9 @@ Audio input, processing architecture, and model choice will be determined throug
 
 ## Lyrics and translation sources
 
-Lyrics are retrieved through LRCLIB. Translations can be entered manually, imported in a project JSON file, or generated with OpenAI.
+Lyrics can be loaded from an exact video match in the public karaoke catalog or searched through LRCLIB. Opening Settings downloads `index.json` and matches its `videoId` entries locally against the current YouTube ID. Each match supplies the project file path; the extension does not scan the `translations/` folders. Renaming a video does not affect lookup. The chosen project is downloaded only when loaded, and its `videoId` is checked again. Translations can be entered manually, imported in a project JSON file, or generated with OpenAI.
 
-Apply translation assigns pasted translations by line order. Review and correct the passages manually in Line editor. Studio timing may need substantial adjustment for live performances.
+Enter translations under each original line in Line editor. Review and correct the passages manually in Line editor. Studio timing may need substantial adjustment for live performances.
 
 ## Reference performance
 
@@ -82,15 +84,19 @@ The downloaded page identifies the video as “FuwaMoco x Senchou Sing - Ahoy!�
 4. Press **Alt+K**, or click the microphone **Karaoke** button after the Transcript tools beside the channel information. If the Transcript extension is absent, the button appears at the end of the same owner row.
 5. Click the gear beside **Karaoke** to open **Settings**; click it again to close the panel. The extension toolbar icon and Firefox extension preferences open this same panel on your active or most recently used YouTube video. Display, timing, AI and GitHub preferences are all here. Configure the activation shortcut in Firefox’s **Manage Extension Shortcuts** menu.
 
+On `https://www.youtube.com/*`, only the lightweight Karaoke and Settings buttons load initially. The interface scripts, project reads and playback polling start on the first Karaoke or Settings action, including shortcuts and the toolbar launcher. Once activated, the interface remains loaded for that page even after closing Settings or disabling Karaoke. The extension’s background component loads separately at extension startup.
+
+Settings has a compact pinned header with **Tutorial**, **Privacy Policy** and **About**. Privacy Policy and About open inline, with their headings and right-aligned **Close** buttons remaining visible while their contents scroll. About shows the application name, installed version, © 2026 Thomas Kemperman and the contact email with the application name as subject. Privacy Policy reads the bundled [privacy.md](privacy.md), which is also the external policy’s single source of truth.
+
 New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. The add-on uses Firefox Manifest V2, requires Firefox 142 or newer, and requires no build step.
 
-Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects and saved keys stay in extension-local storage except for these explicit requests and user-triggered exports. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
+Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects and saved keys stay in extension-local storage except for these service requests and user-triggered exports. Opening Settings automatically downloads the public catalog index; video-ID matching happens locally. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
 
 ## First playback test
 
 1. Activate karaoke and open the lyrics editor.
-2. Search LRCLIB or paste/import lyrics under **Paste lyrics & import / export**.
-3. Use **Manual translation → Apply translation**, or enter each English passage under its matching original line in **Line editor**. If timing needs adjustment, select the first line and mark it as the vocals begin; **Alt+Shift+M** marks successive lines while the editor is open and focus is outside text fields.
+2. Load an exact catalog match under **Find lyrics**, search LRCLIB, or load a lyrics file under **Import / export**.
+3. Use **Line editor → Add first line**, or **Add line before / Add line after** on an existing line, to create lines, then enter each English passage under its matching original line in **Line editor**. If timing needs adjustment, edit each line’s **Start** and **End** fields; **Alt+Shift+M** marks successive lines while the editor is open and focus is outside text fields.
 4. Play the video and check pause, backward/forward seeking, playback speed, fullscreen, and Alt+K. The microphone button should reflect the same on/off state.
 5. Generate furigana through **AI translation** with an API key, or through the dictionary button in **Display & timing** without one. Check current/next-line ruby and toggle **Show furigana**.
 6. Correct a reading in **Line editor**, then try **Correct a term throughout this song** for a repeated term.
@@ -114,21 +120,23 @@ Automatic translation and general romaji-to-Japanese conversion are intentionall
 
 ## Display and timing
 
-The gear toggles the editor open or closed. The Close button also closes it. **Display & timing** controls the timing delay (positive means later), text size, distance above the video bottom, **Show next line**, and **Show furigana**. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
+The gear or **Alt+L** toggles the editor open or closed. The Close button also closes it. **Display & timing** controls the timing delay (positive means later), text size, distance above the video bottom, **Show next line**, and **Show furigana**. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
 
-Use **Start at** to set when the first lyric should appear, in `minutes:seconds` (for example, `0:33`). With untimed lyrics, this sets the first non-empty line’s start. Alternatively, select a line in **Line editor** and click **Sync with video position** as it begins. Sync sets an untimed line’s start or adjusts the global delay for an already timed line, preserving relative timing and milliseconds. A yellow warning appears when selecting untimed lyrics and remains above the editor while any lyric lines still need timing. Mark each remaining line manually; setting the first start does not automatically time the rest of the song.
+Use **Start at** to set when the first lyric should appear, in `minutes:seconds` with optional milliseconds (for example, `0:32.250`). With untimed lyrics, this sets the first non-empty line’s start. Alternatively, select a line in **Line editor** and click **Sync with video position** as it begins. Sync sets an untimed line’s start or adjusts the global delay for an already timed line, preserving relative timing and milliseconds. A yellow warning appears when selecting untimed lyrics and remains above the editor while any lyric lines still need timing. Set each remaining line’s Start time; setting the first start does not automatically time the rest of the song.
 
-**Start (s)** and **End (s)** in Line editor show video times including the delay and update when it changes. Editing these values converts them back to stored timestamps automatically. For example, a first lyric at `15.27` seconds with **Start at** set to `0:33` produces a delay of `17.73` seconds and an editor start of `33`. Synchronizing does not turn karaoke on; activate it with **Karaoke** or **Alt+K** to see the overlay.
+**Start** and **End** in Line editor show video times including the delay and update when it changes. Editing these values converts them back to stored timestamps automatically. For example, a first lyric at `15.27` seconds with **Start at** set to `0:32` produces a delay of `16.73` seconds and an editor start of `0:32`. Start at, Start and End use the placeholder `0:32.250`. Fractions with one to three decimal places are supported; a blank End lasts until the next timed line. There is no separate delay input. Opening Settings automatically enables Karaoke; closing Settings leaves it enabled. Use **Karaoke** or **Alt+K** to turn it off.
 
 Changing a line’s start in Line editor shifts that line’s end and all following lines by the same amount, without confirmation. Existing durations and gaps are preserved. Setting an untimed line’s first start only times that line.
 
 ## Applying translations
 
-Paste a translation under **Manual translation** and click **Apply translation** to assign non-empty lines in order to non-empty lyrics blocks. Blank instrumental blocks are skipped. Different non-empty line counts show a warning. Choose **Apply anyway** to apply the available pairs, keeping unmatched original lines unchanged and ignoring extra translation lines, or **Cancel** to leave translations unchanged. This matches by position, not meaning, so review the opened **Line editor**, especially for live arrangements and repeated passages. Replacing existing translations requires confirmation. Applied translations are saved locally and use the original timing; unapplied pasted text is temporary. Individual editing and JSON import remain available.
+Use **Line editor → Add first line**, or **Add line before / Add line after** on an existing line, to create a line, then enter its original lyrics and translation. Existing lyrics can be translated directly in each row. Lyrics and translations share timing and edits save automatically.
+
+Under **Import / export**, import or export project JSON for a complete backup including translations and furigana. JSON file import loads the lyrics, translations, furigana and timing for the current video without video matching. Import LRC with or without timestamps. **Export timed LRC** includes original lyrics and video timing (including the delay); every line needs a start time. **Export untimed LRC** saves original lyrics without timestamps. LRC does not preserve translations, furigana, or project metadata.
 
 ## AI translation
 
-Open **AI translation**, below **Manual translation**, enter your OpenAI API key, select a model (GPT-6 Astra by default, GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5, GPT-4.1, GPT-4o, or GPT-4o mini), and choose a translation language code. Your key, provider, model, and language preferences persist in the extension’s local storage. The key is not included in project JSON exports; use **Remove saved API key** to delete it.
+Open **AI translation**, enter your OpenAI API key, select a model (GPT-6 Astra by default, GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5, GPT-4.1, GPT-4o, or GPT-4o mini), and choose a translation language code. Your key, provider, model, and language preferences persist in the extension’s local storage. The key is not included in project JSON exports; use **Remove saved API key** to delete it.
 
 **Translate all lines** sends all original lines together to OpenAI for context. API usage is billed to your OpenAI account. Strict JSON output pairs each translation with its original block ID. Invalid, incomplete, or stale results leave existing translations unchanged. Replacing existing translations requires confirmation. Review the translations in Line editor; timings and other language translations are preserved.
 
@@ -178,6 +186,18 @@ See [agents.md](agents.md) for the architecture, implementation sequence, and ac
 
 Use English for code comments, identifiers, documentation, commit messages, and default interface text. Lyrics, translations, artist names, and song titles retain their original languages.
 
-Run `npm test` for the core, search, translation, furigana, repository, launcher and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
+Run `npm test` for the core, search, translation, furigana, repository, launcher, bootstrap, tutorial and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.2.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes only the manifest and runtime assets. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.3.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The packaging command does not sign or publish the add-on.
+
+### Guided tutorial
+
+After activating the interface, the tutorial opens Settings automatically once the video project is ready, if no previous tutorial visit has been saved. The purple **Tutorial** button in Settings reopens it at your saved step. Use **Previous**, **Next**, the chapter menu, or **×** (Escape) to navigate or stop. Progress is stored locally, separately from song projects.
+
+The seven basic steps cover database search, dictionary furigana, lyric editing, reading corrections, global and individual timing, and playback. Correct readings automatically expands Edit furigana readings. Optional chapters cover AI translations, contextual furigana, recurring term corrections, live arrangements, computer backups and imports. Developer repository setup and publication are excluded. Controls remain usable during the guide; advancing a step does not run any action. On narrow screens the guide appears below Settings.
+
+**Find lyrics** checks the public karaoke catalog when Settings opens and offers matching projects for the exact YouTube video ID. Loading asks before replacing existing lyrics. **Search LRCLIB** remains available as an alternative, including when the catalog is unavailable.
+
+The header places **Close** beside the title, with **Tutorial**, **Privacy Policy** and **About** below. About contains the contact email link with subject ルンルンKARAOKE. Tutorial has no icon; the previous video icon is retained as a reserve asset. Tutorial highlighting disappears when the guide closes.
+
+Each line offers **Add line before**, **Add line after**, **Jump to**, reorder arrows, **Repeat** and **Delete**. Jump to seeks the video to the line’s start including its offset, preserving paused playback. Empty projects offer **Add first line**. Delete asks for confirmation only if the line contains text, translations, furigana or timing.

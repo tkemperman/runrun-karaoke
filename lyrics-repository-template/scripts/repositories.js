@@ -14,7 +14,8 @@
       const source = value[side] || {};
       const branch = source.branch?.trim() || 'main';
       if (typeof branch !== 'string' || branch.length > 200 || !/^[A-Za-z0-9_./-]+$/.test(branch) || branch.includes('..') || branch.startsWith('/') || branch.endsWith('/')) throw new Error('Invalid repository branch.');
-      result[side] = { repo: source.repo ? repository(source.repo) : '', branch };
+      const defaultRepo = side === 'publishing' ? 'tkemperman/runrun-karaoke-lyrics-catalog' : '';
+      result[side] = { repo: source.repo ? repository(source.repo) : defaultRepo, branch };
     }
     return result;
   }

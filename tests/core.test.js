@@ -184,3 +184,28 @@ test('initial timing has no delta and open-ended rows retain their missing end',
   C.moveLineStart(p, p.blocks[0], null);
   assert.deepEqual(p.blocks.map(b => [b.start,b.end]), [[null,null],[11,13]]);
 });
+
+test('LRC export includes video offset and instrumental boundaries without changing the project', () => {
+  const project = C.project('abcdefghijk');
+  project.offset = 0.125;
+  project.blocks = [C.block('First', 59.999, 61), C.block('Second', 63, 65)];
+  project.blocks[0].translations.en = 'Translation';
+  const before = JSON.stringify(project);
+  const text = C.exportLrc(project);
+  assert.equal(text, '[01:00.124]First\n[01:01.125]\n[01:03.125]Second\n[01:05.125]\n');
+  assert.deepEqual(C.importLyrics(text).map(row => [row.text, row.start]), [['First', 60.124], ['', 61.125], ['Second', 63.125], ['', 65.125]]);
+  assert.equal(C.exportLrc(project, false), 'First\nSecond\n');
+  assert.equal(JSON.stringify(project), before);
+});
+
+test('untimed LRC imports metadata and lyrics; timed export rejects missing or negative video timing', () => {
+  const project = C.project('abcdefghijk');
+  project.blocks = C.importLyrics('\uFEFF[ar:Example]\nFirst\n\nSecond');
+  assert.deepEqual(project.blocks.map(row => [row.text, row.start]), [['First', null], ['Second', null]]);
+  assert.throws(() => C.exportLrc(project), /Every line/);
+  assert.equal(C.exportLrc(project, false), 'First\nSecond\n');
+  project.blocks = [C.block('First', 1, 2)];
+  project.offset = -2;
+  assert.throws(() => C.exportLrc(project), /Every line/);
+  assert.throws(() => C.importLyrics('[ar:Example]\n'), /No lyrics/);
+});

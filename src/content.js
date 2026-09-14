@@ -11,7 +11,11 @@
     * { box-sizing: border-box; } [hidden] { display: none !important; }
     button, input, textarea, select { font: inherit; }
     button { cursor: pointer; border: 1px solid #526078; border-radius: 7px; padding: 7px 11px; background: #28354b; color: #fff; }
+    details > button + button { margin-inline-start: 8px; }
     button:hover { background: #3c4d69; } button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    a.primary-button { display: inline-flex; align-items: center; border: 1px solid #60a5fa; border-radius: 7px; padding: 7px 11px; background: #2563eb; color: #fff; text-decoration: none; }
+    a.primary-button:hover { background: #1d4ed8; }
+    a.primary-button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
     button:disabled { cursor: wait; opacity: .65; }
     button[aria-busy=true]::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: 8px; vertical-align: -.15em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: translation-spin .75s linear infinite; }
     @keyframes translation-spin { to { transform: rotate(360deg); } }
@@ -21,13 +25,22 @@
     label.checkbox-row { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
     .sync-row { margin: 8px 0; } .sync-row input { width: 100px; }
     .checkbox-row input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #67e8f9; cursor: pointer; }
-    #panel { position: fixed; right: 16px; top: 70px; width: min(550px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow: auto; z-index: 2147483647; background: #182235; border: 1px solid #526078; border-radius: 12px; padding: 16px; box-shadow: 0 12px 40px #0009; }
+    #panel { position: fixed; right: 16px; top: 70px; width: min(550px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow: auto; z-index: 2147483647; background: #182235; border: 1px solid #526078; border-radius: 12px; padding: 12px 16px 16px; box-shadow: 0 12px 40px #0009; }
+    #panel.privacy-open, #panel.about-open { display:flex; flex-direction:column; height:calc(100vh - 140px); overflow:hidden; }
+    #panel.privacy-open > :not(header):not(#privacy-policy) { display:none !important; }
+    #panel.about-open > :not(header):not(#about) { display:none !important; }
+    #panel.privacy-open > header, #panel.about-open > header { flex-shrink:0; }
+    #privacy-policy, #about { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+    #privacy-toolbar, #about-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; padding-bottom:12px; border-bottom:1px solid #39465c; }
+    #privacy-toolbar h3, #about-toolbar h3 { margin:0; font-size:17px; }
+    #privacy-toolbar button, #about-toolbar button { flex-shrink:0; }
+    #privacy-text, #about-text { min-height:0; overflow:auto; overscroll-behavior:contain; padding-top:8px; }
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
     details { border-top: 1px solid #39465c; padding: 12px 0; } summary { cursor: pointer; font-weight: 650; }
     #status { white-space: pre-wrap; color: #8de9dd; } #status.error { color: #ffb4b4; }
     #repository-status { white-space: pre-wrap; color: #8de9dd; } #repository-status.error { color: #ffb4b4; }
     .muted.warning { color: #fef08a; background: #422f12; border: 1px solid #eab308; border-radius: 7px; padding: 10px 12px; }
-    #rows { display: grid; gap: 12px; } .block { padding: 10px; border: 1px solid #41516d; border-radius: 8px; } .block.selected { border-color: #67e8f9; } .block label { font-size: 12px; }
+    #rows { display: grid; gap: 12px; } .block { padding: 10px; border: 1px solid #41516d; border-radius: 8px; } #panel.tutorial-active .block.selected { border-color: #67e8f9; } .block label { font-size: 12px; }
     #overlay { position: absolute; left: 5%; right: 5%; bottom: 13%; text-align: center; z-index: 60; pointer-events: none; font-family: system-ui, sans-serif; text-shadow: 0 2px 5px #000, 0 0 8px #000; }
     #caption { display: inline-block; max-width: 100%; background: #07111bd9; border-radius: 10px; padding: 10px 20px; }
     ruby { ruby-position: over; } rt { font-size: .5em; font-weight: 400; line-height: 1; }
@@ -55,51 +68,108 @@
     return node;
   }
   function section(title) { const node = el("details", null, panel); el("summary", title, node); return node; }
-  const inlineHost = document.createElement("span");
-  inlineHost.dataset.ytExtension = "youtube-karaoke";
-  inlineHost.style.cssText = "display:inline-flex;align-items:center;margin-left:8px;flex-shrink:0";
-  const inlineRoot = inlineHost.attachShadow({ mode: "open" });
-  const inlineStyle = document.createElement("style");
-  inlineStyle.textContent = `button { display:inline-flex;align-items:center;gap:8px;font: 500 14px system-ui,sans-serif; height:36px; border:0; border-radius:18px; padding:0 16px; cursor:pointer; color:var(--yt-spec-text-primary,#fff); background:var(--yt-spec-badge-chip-background,#303030); white-space:nowrap; } button[aria-pressed=true] { background:#155e75; color:#fff; } button:focus-visible { outline:2px solid #22d3ee; outline-offset:2px; }`;
-  inlineStyle.textContent += ` button:first-of-type { border-radius:18px 0 0 18px; } .settings { box-sizing:border-box; width:40px; padding:0; justify-content:center; border-radius:0 18px 18px 0; border-left:1px solid var(--yt-spec-10-percent-layer,#ffffff29); } button:hover { filter:brightness(1.15); }`;
-  inlineRoot.append(inlineStyle);
-  const inlineToggle = button("Karaoke", inlineRoot, () => setEnabled(!enabled));
-  inlineToggle.setAttribute("aria-pressed", "false");
-  inlineToggle.title = "Turn karaoke subtitles on or off";
-  const microphone = document.createElement("span");
-  microphone.setAttribute("aria-hidden", "true");
-  microphone.style.cssText = "display:inline-block;width:19px;height:19px;flex-shrink:0;background-color:currentColor;mask-mode:alpha;mask-size:contain;mask-repeat:no-repeat;mask-position:center";
-  microphone.style.maskImage = `url("${browser.runtime.getURL("src/microphone.png")}")`;
-  inlineToggle.prepend(microphone);
-  const inlineSettings = button("", inlineRoot, () => { panel.hidden = !panel.hidden; });
-  inlineSettings.className = "settings";
-  inlineSettings.title = "Karaoke Settings";
-  inlineSettings.setAttribute("aria-label", "Toggle karaoke settings");
-  const gear = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  gear.setAttribute("viewBox", "0 0 24 24");
-  gear.setAttribute("width", "24");
-  gear.setAttribute("height", "24");
-  gear.setAttribute("fill", "currentColor");
-  gear.setAttribute("aria-hidden", "true");
-  const gearPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  gearPath.setAttribute("d", "M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.1 7.1 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 2h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1a.49.49 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64l2.11 1.65a8.4 8.4 0 0 0 0 1.96l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z");
-  gear.append(gearPath);
-  inlineSettings.append(gear);
-  function mountInlineButton() {
-    if (location.pathname !== "/watch") { inlineHost.remove(); return; }
-    const owner = document.querySelector("ytd-watch-metadata #owner");
-    if (!owner) return;
-    const transcript = owner.querySelector('[data-yt-extension="transcript-copier"]');
-    if (transcript) {
-      if (transcript.nextElementSibling !== inlineHost) transcript.after(inlineHost);
-    } else if (inlineHost.parentNode !== owner) owner.append(inlineHost);
-  }
   const panel = el("section", null, root, { id: "panel", "aria-label": "ルンルンKARAOKE editor" }); panel.hidden = true;
   const header = el("header", null, panel); el("h2", "ルンルンKARAOKE", header);
-  button("Close", header, () => { panel.hidden = true; });
+  button("Close", header, () => { tutorial.close(false); panel.hidden = true; });
+  const headerActions = el("div", null, header, { class: "row", style: "flex-basis:100%;justify-content:flex-start" });
+  const tutorialButton = button("Tutorial", headerActions, () => tutorial.open());
+  tutorialButton.style.cssText = "display:inline-flex;align-items:center;gap:7px;background:#7542b5;border-color:#b58aef";
+  const privacyButton = button("Privacy Policy", headerActions, async () => {
+    tutorial.close(false);
+    setAboutOpen(false);
+    setPrivacyOpen(privacyPanel.hidden);
+    if (privacyPanel.hidden || privacyLoaded) return;
+    privacyText.textContent = "Loading privacy policy…";
+    try {
+      const response = await fetch(browser.runtime.getURL("privacy.md"));
+      if (!response.ok) throw new Error("Could not load the privacy policy. Close and reopen it to retry.");
+      const markdown = await response.text();
+      privacyText.textContent = "";
+      for (const block of markdown.trim().split(/\n\s*\n/)) {
+        const heading = block.match(/^(#{1,2}) (.+)$/);
+        if (heading?.[1] === "#") {
+          privacyHeading.textContent = heading[2];
+          continue;
+        }
+        const node = el(heading ? (heading[1].length === 1 ? "h3" : "h4") : "p", null, privacyText);
+        const text = heading ? heading[2] : block.replace(/^- /, "");
+        for (const part of text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(mailto:[^)]+\)|`[^`]+`)/g)) {
+          if (part.startsWith("**")) el("strong", part.slice(2, -2), node);
+          else if (part.startsWith("`")) el("code", part.slice(1, -1), node);
+          else {
+            const link = part.match(/^\[([^\]]+)\]\((mailto:[^)]+)\)$/);
+            if (link) el("a", link[1], node, { href: link[2] });
+            else node.append(document.createTextNode(part));
+          }
+        }
+      }
+      privacyLoaded = true;
+    } catch (error) {
+      privacyText.textContent = error.message || "Could not load the privacy policy. Close and reopen it to retry.";
+    }
+  });
+  privacyButton.setAttribute("aria-controls", "privacy-policy");
+  privacyButton.setAttribute("aria-expanded", "false");
+  privacyButton.style.cssText = "background:#2563eb;border-color:#60a5fa";
+  const aboutButton = button("About", headerActions, () => {
+    tutorial.close(false);
+    setPrivacyOpen(false);
+    setAboutOpen(aboutPanel.hidden);
+  });
+  aboutButton.setAttribute("aria-controls", "about");
+  aboutButton.setAttribute("aria-expanded", "false");
+  const privacyPanel = el("section", null, panel, { id: "privacy-policy", "aria-label": "Privacy Policy" });
+  privacyPanel.hidden = true;
+  privacyPanel.style.cssText = "margin-top:12px;padding:12px;border:1px solid #526078;border-radius:8px;overflow-wrap:anywhere";
+  const privacyToolbar = el("div", null, privacyPanel, { id: "privacy-toolbar" });
+  const privacyHeading = el("h3", "Privacy Policy", privacyToolbar);
+  const privacyClose = button("Close", privacyToolbar, () => { setPrivacyOpen(false); privacyButton.focus(); });
+  privacyClose.setAttribute("aria-label", "Close Privacy Policy");
+  const privacyText = el("div", null, privacyPanel, { id: "privacy-text", tabindex: "0", role: "region", "aria-label": "Privacy Policy text", "aria-live": "polite" });
+  let privacyLoaded = false;
+  function setPrivacyOpen(open) {
+    privacyPanel.hidden = !open;
+    panel.classList.toggle("privacy-open", open);
+    privacyButton.setAttribute("aria-expanded", String(open));
+    if (open) privacyClose.focus();
+  }
+  privacyPanel.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setPrivacyOpen(false);
+      privacyButton.focus();
+    }
+  });
+  const aboutPanel = el("section", null, panel, { id: "about", "aria-label": "About ルンルンKARAOKE" });
+  aboutPanel.hidden = true;
+  aboutPanel.style.cssText = "margin-top:12px;padding:12px;border:1px solid #526078;border-radius:8px;overflow-wrap:anywhere";
+  const aboutToolbar = el("div", null, aboutPanel, { id: "about-toolbar" });
+  el("h3", "About", aboutToolbar);
+  const aboutClose = button("Close", aboutToolbar, () => { setAboutOpen(false); aboutButton.focus(); });
+  aboutClose.setAttribute("aria-label", "Close About");
+  const aboutText = el("div", null, aboutPanel, { id: "about-text", tabindex: "0", role: "region", "aria-label": "About information" });
+  el("p", `Version ${browser.runtime.getManifest().version}`, aboutText, { class: "muted" });
+  el("p", "Editable bilingual karaoke lyrics for YouTube.", aboutText);
+  el("p", "© 2026 Thomas Kemperman", aboutText);
+  el("a", "thomas@silverwoodslabs.com", el("p", null, aboutText), {
+    href: "mailto:thomas@silverwoodslabs.com?subject=" + encodeURIComponent("ルンルンKARAOKE")
+  });
+  function setAboutOpen(open) {
+    aboutPanel.hidden = !open;
+    panel.classList.toggle("about-open", open);
+    aboutButton.setAttribute("aria-expanded", String(open));
+    if (open) aboutClose.focus();
+  }
+  aboutPanel.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setAboutOpen(false);
+      aboutButton.focus();
+    }
+  });
   const title = el("p", "Open a YouTube video to begin.", panel, { class: "muted" });
   const status = el("p", "", panel, { id: "status", role: "status" });
-  const untimedMessage = "These lyrics have no timing. Set the first line with Start at or Sync, then mark each remaining line in the Line editor as the vocals begin. Setting the first line does not automatically time the rest of the song.";
+  const untimedMessage = "These lyrics have no timing. Set the first line with Start at or Sync, then set each remaining line’s Start time in Line editor. Setting the first line does not automatically time the rest of the song.";
   const timingWarning = el("p", untimedMessage, panel, { class: "muted warning", role: "status" });
   timingWarning.hidden = true;
   function notify(text, error = false) { status.textContent = text; status.className = error ? "error" : ""; }
@@ -130,14 +200,17 @@
   }
   const display = section("Display & timing"); display.open = true;
   const controls = el("div", null, display, { class: "row" });
-  function setEnabled(value) { enabled = value; inlineToggle.setAttribute("aria-pressed", String(enabled)); if (enabled && !project?.blocks.length) panel.hidden = false; return { enabled }; }
-  const offset = input("Delay in seconds (+ later / − earlier)", display, "0", "number"); offset.step = "0.1";
-  offset.addEventListener("change", () => { if (project) { project.offset = Number(offset.value); renderRows(); save(); } });
+  function setEnabled(value) { enabled = value; globalThis.KaraokeSetPressed?.(enabled); if (enabled && !project?.blocks.length) panel.hidden = false; return { enabled }; }
+  function setEditorOpen(open) {
+    panel.hidden = !open;
+    if (open) setEnabled(true);
+    return { enabled };
+  }
   el("label", "Start at", display, { for: "lyrics-start-at" });
   const syncRow = el("div", null, display, { class: "row sync-row" });
   const startAt = el("input", null, syncRow, { id: "lyrics-start-at", type: "text" });
   el("span", "or", syncRow);
-  startAt.placeholder = "0:33";
+  startAt.placeholder = "0:32.250";
   startAt.addEventListener("change", () => {
     try {
       requireProject();
@@ -160,16 +233,25 @@
     timingWarning.textContent = firstTimedLyric()
       ? `${untimed} lyric line${untimed === 1 ? " still needs" : "s still need"} timing. Mark each remaining line in the Line editor as the vocals begin. Sync does not automatically time the rest of the song.`
       : untimedMessage;
-    offset.value = project?.offset || 0;
     const first = firstTimedLyric();
     startAt.disabled = !project;
     if (!first) { startAt.value = ""; return; }
-    const milliseconds = Math.round((first.start + project.offset) * 1000);
+    startAt.value = formatTime(first.start + project.offset);
+  }
+  function formatTime(value) {
+    const milliseconds = Math.round(value * 1000);
     const absolute = Math.abs(milliseconds);
     const seconds = String(Math.floor(absolute / 1000) % 60).padStart(2, "0");
     const fraction = String(absolute % 1000).padStart(3, "0").replace(/0+$/, "");
-    startAt.value = `${milliseconds < 0 ? "-" : ""}${Math.floor(absolute / 60000)}:${seconds}${fraction ? `.${fraction}` : ""}`;
+    return `${milliseconds < 0 ? "-" : ""}${Math.floor(absolute / 60000)}:${seconds}${fraction ? `.${fraction}` : ""}`;
   }
+  function parseLineTime(value) {
+    if (!value.trim()) return null;
+    const match = value.trim().match(/^(-?)(\d+):([0-5]\d)(?:\.(\d{1,3}))?$/);
+    if (!match) throw new Error("Use minutes:seconds, for example 3:32 or 3:32.250. Leave the field blank for no timing.");
+    return (Number(match[2]) * 60 + Number(match[3]) + Number(`0.${match[4] || 0}`)) * (match[1] ? -1 : 1);
+  }
+
   button("Sync with video position", syncRow, () => {
     requireProject();
     const row = project.blocks[selected];
@@ -177,7 +259,6 @@
     const media = video();
     if (!media || document.querySelector("#movie_player.ad-showing")) throw new Error("Wait for the main video (not an advertisement).");
     C.syncLine(project, row, media.currentTime);
-    offset.value = project.offset;
     renderRows();
     save();
   }).title = "Sync selected line to current video position";
@@ -293,7 +374,38 @@
     } catch (error) { if (project === target && generation === token) correctionStatus.textContent = error.message; }
     finally { applyCorrection.disabled = false; applyCorrection.removeAttribute("aria-busy"); }
   });
-  const searchSection = section("Find lyrics · LRCLIB");
+  const searchSection = section("Find lyrics");
+  const matchingCatalog = el("div", null, searchSection);
+  let checkedCatalogGeneration = -1;
+  async function findCatalogMatch() {
+    const token = generation, requestedId = videoId;
+    checkedCatalogGeneration = token;
+    matchingCatalog.replaceChildren();
+    const status = el("p", "Checking the karaoke catalog for this video…", matchingCatalog, { role: "status", class: "muted" });
+    try {
+      const entries = await request({ type: "catalog-search", videoId: requestedId });
+      if (generation !== token) return;
+      status.textContent = entries.length ? "Catalog lyrics found for this exact YouTube video:" : "No catalog lyrics found for this video. You can search LRCLIB below.";
+      for (const entry of entries) {
+        const load = button(`Load catalog lyrics · ${entry.translationLanguage}`, matchingCatalog, async () => {
+          requireProject();
+          const snapshot = JSON.stringify(project);
+          load.disabled = true;
+          try {
+            const imported = C.validate(await request({ type: "catalog-load", videoId: requestedId, file: entry.file }));
+            if (generation !== token) return;
+            if (JSON.stringify(project) !== snapshot) throw new Error("Project changed while downloading. Load again to review replacement.");
+            if (!replaceAllowed()) return;
+            project = imported; selected = 0; refresh(); save();
+            notify("Loaded catalog lyrics.");
+          } finally { load.disabled = false; }
+        });
+      }
+    } catch (error) {
+      if (generation === token) status.textContent = "Could not check the catalog. You can still search LRCLIB below.";
+    }
+  }
+  el("p", "Search LRCLIB for an alternative recording:", searchSection, { class: "muted" });
   const query = input("Song or artist", searchSection);
   let queryDirty = false;
   let queryReady = false;
@@ -319,14 +431,14 @@
       if (queryReady && !queryDirty) query.value = currentTitle;
     }
   }
-  button("Search", searchSection, async () => {
+  button("Search LRCLIB", searchSection, async () => {
     requireProject(); const currentGeneration = generation; notify("Searching LRCLIB…");
     const found = await request({ type: "search", query: query.value });
     if (currentGeneration !== generation) return;
     results = found; resultList.replaceChildren();
     results.forEach((row, index) => el("option", `${row.artist} — ${row.title} (${Math.round(row.duration || 0)}s; ${row.syncedLyrics ? "timed" : "untimed"})`, resultList, { value: String(index) }));
     updateSelectionWarning();
-    notify(results.length ? "Choose a recording. Live timing may need correction." : "No results. Try another title, or paste lyrics.");
+    notify(results.length ? "Choose a recording. Live timing may need correction." : "No results. Try another title, import a lyrics file, or create lines in Line editor.");
   });
   const resultList = el("select", null, searchSection, { "aria-label": "Lyrics recordings", style: "width:100%;margin:8px 0" });
   const selectionWarning = el("p", untimedMessage, searchSection, { class: "muted warning", role: "status" });
@@ -345,34 +457,6 @@
     project.source = { provider: "lrclib", url: source.url };
     selected = 0; refresh(); save();
   });
-  const translationSection = section("Manual translation");
-  const translationDraft = input("Translation (one line per original lyrics line)", translationSection, "", "textarea");
-  function applyTranslation(allowMismatch = false) {
-    translationWarning.hidden = true;
-    requireProject();
-    let matches;
-    try { matches = C.matchTranslation(project.blocks, translationDraft.value, allowMismatch); }
-    catch (error) {
-      if (error.code !== "TRANSLATION_LINE_COUNT") throw error;
-      translationWarningText.textContent = error.message;
-      translationWarning.hidden = false;
-      return;
-    }
-    const language = project.translationLanguage;
-    if (matches.some(({ row, text }) => row.translations[language]?.trim() && row.translations[language] !== text) && !window.confirm("Replace existing translations with the pasted translation?")) return;
-    for (const { row, text } of matches) row.translations[language] = text;
-    renderRows();
-    rows.closest("details").open = true;
-    save();
-  }
-  button("Apply translation", translationSection, () => applyTranslation());
-  const translationWarning = el("div", null, translationSection, { role: "alert" });
-  translationWarning.hidden = true;
-  const translationWarningText = el("p", "", translationWarning);
-  button("Apply anyway", translationWarning, () => applyTranslation(true));
-  button("Cancel", translationWarning, () => { translationWarning.hidden = true; });
-  translationDraft.addEventListener("input", () => { translationWarning.hidden = true; });
-  el("p", "Apply matches lines in order, skipping blank lines. Different line counts show a warning with an Apply anyway option. Review the result in Line editor. Pasted text is temporary until applied.", translationSection, { class: "muted" });
   const automatic = section("AI translation");
   const provider = el("select", null, el("label", "Provider", automatic));
   el("option", "OpenAI", provider, { value: "openai" });
@@ -501,9 +585,15 @@
     }
   });
   const repositorySection = section("Lyrics repositories · GitHub");
+  // Developer mode only changes visibility; saved repository settings stay intact.
+  repositorySection.hidden = true;
+  try {
+    repositorySection.hidden = localStorage.getItem("runrunKaraoke.developerMode") !== "true";
+  } catch (_) { /* Keep developer controls hidden when localStorage is unavailable. */ }
   el("p", "Configure separate retrieval and upload repositories below. Search downloads the public catalog; publishing sends the complete project, including original lyrics, translations, timing and furigana, to your upload repository.", repositorySection, { class: "muted" });
   // Keep the saved token inside an extension-origin frame, outside YouTube's DOM.
-  const repositoryPreferences = el("iframe", null, repositorySection, {
+  const repositoryFrame = el("div", null, repositorySection, { style: "position:relative" });
+  const repositoryPreferences = el("iframe", null, repositoryFrame, {
     src: browser.runtime.getURL("src/settings.html"), title: "GitHub repository settings",
     style: "width:100%;height:640px;border:0;display:block;color-scheme:dark"
   });
@@ -511,6 +601,7 @@
     if (event.source !== repositoryPreferences.contentWindow || event.origin !== browser.runtime.getURL("").replace(/\/$/, "")) return;
     if (event.data?.type === "karaoke-repository-height" && Number.isFinite(event.data.height)) {
       repositoryPreferences.style.height = `${Math.max(100, Math.min(2000, event.data.height))}px`;
+
     }
   });
   const repositoryQuery = input("Filter catalog by title, artist or video ID (blank: this video)", repositorySection);
@@ -566,6 +657,43 @@
       project = imported; selected = 0; refresh(); save();
     } finally { repositoryLoad.disabled = false; }
   });
+  const contributionNotice = el("div", null, repositorySection, { role: "region", "aria-label": "Publication options", style: "padding:12px;border:1px solid #b58aef;border-radius:8px;margin-top:12px" });
+  contributionNotice.hidden = true;
+  async function offerContribution(target) {
+    const preferenceKey = `preferPullRequest:${target.repo}`;
+    const saved = await browser.storage.local.get(preferenceKey);
+    contributionNotice.replaceChildren();
+    contributionNotice.hidden = false;
+    function showGuide() {
+      contributionNotice.replaceChildren();
+      el("h3", "Contribute via pull request", contributionNotice);
+      el("p", `Destination: ${target.repo}. Export your project, add the JSON file to your fork in the catalog’s translations folder, then open a pull request to submit it for review. A GitHub account is required. Automatic submission is not available yet.`, contributionNotice);
+      button("Export project JSON", contributionNotice, () => exportButton.click());
+      el("a", "Open GitHub fork page ↗", contributionNotice, { href: `https://github.com/${target.repo}/fork`, target: "_blank", rel: "noopener noreferrer", style: "display:block;color:#c6a0fa;margin-top:8px" });
+      button("Show publication options again", contributionNotice, async () => {
+        await browser.storage.local.remove(preferenceKey);
+        await offerContribution(target);
+      });
+    }
+    if (saved[preferenceKey]) { showGuide(); return; }
+    el("h3", "Choose how to publish", contributionNotice);
+    el("p", "Set up a GitHub token to publish directly to a repository you can write to, or contribute via a pull request for review. Without a token, the PR route currently continues manually on GitHub.", contributionNotice);
+    const label = el("label", null, contributionNotice, { class: "checkbox-row" });
+    const remember = el("input", null, label, { type: "checkbox", style: "width:auto;flex-shrink:0" });
+    el("span", "Do not show again — use pull requests when no token is available", label);
+    button("Set up token", contributionNotice, () => {
+      contributionNotice.hidden = true;
+      repositoryPreferences.scrollIntoView({ block: "center" });
+      repositoryPreferences.focus();
+    });
+    button("Continue via PR", contributionNotice, async () => {
+      try {
+        if (remember.checked) await browser.storage.local.set({ [preferenceKey]: true });
+        showGuide();
+      } catch (error) { repositoryNotify(error.message, true); }
+    });
+    button("Cancel", contributionNotice, () => { contributionNotice.hidden = true; });
+  }
   const publishButton = repositoryButton("Publish project to GitHub", async () => {
     requireProject();
     if (!project.blocks.some(b => b.text.trim())) throw new Error("Load lyrics before publishing.");
@@ -573,6 +701,13 @@
     if (!videoTitle) throw new Error("Wait for the YouTube video title before publishing.");
     publishButton.disabled = true; publishButton.textContent = "Checking destination…";
     try {
+      const preferences = await request({ type: "repository-settings" });
+      if (!preferences.hasToken) {
+        await offerContribution(preferences.publishing);
+        contributionNotice.scrollIntoView({ block: "nearest" });
+        return;
+      }
+      contributionNotice.hidden = true;
       const destination = await request({ type: "repository-inspect", project: snapshot, videoTitle });
       if (generation !== currentGeneration || currentVideoTitle() !== videoTitle || JSON.stringify(project) !== JSON.stringify(snapshot)) throw new Error("Project changed. Start publishing again.");
       if (!window.confirm(`${destination.sha ? "Replace the existing file" : "Publish this project"} on GitHub?\n\n${destination.target.repo} · ${destination.target.branch}\n${destination.file}\n\nThis uploads all lyrics, translations, timing and furigana in this project.`)) return;
@@ -581,15 +716,7 @@
       if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes; search again shortly.`);
     } finally { publishButton.disabled = false; publishButton.textContent = "Publish project to GitHub"; }
   });
-  const manual = section("Paste lyrics & import / export");
-  const originalDraft = input("Original lyrics (one block per line), or timed LRC", manual, "", "textarea");
-  button("Use pasted lyrics", manual, () => {
-    requireProject();
-    const value = originalDraft.value.trim(); if (!value) throw new Error("Paste lyrics first.");
-    const blocks = /\[\d+:[0-5]\d/.test(value) ? C.parseLrc(value) : value.split(/\r?\n/).filter(line => line.trim()).map(line => C.block(line));
-    if (!replaceAllowed()) return;
-    project.blocks = blocks; selected = 0; refresh(); save();
-  });
+  const manual = section("Import / export");
   const importFile = input("Import .lrc or project .json", manual, "", "file"); importFile.accept = ".lrc,.json";
   importFile.addEventListener("change", async () => {
     try {
@@ -598,32 +725,52 @@
       const text = await file.text(); if (generation !== currentGeneration) return;
       if (file.name.toLowerCase().endsWith(".json")) {
         const imported = C.validate(JSON.parse(text));
-        if (imported.videoId !== videoId) throw new Error("This project belongs to another video. Open its YouTube video before importing.");
+        // File imports belong to the current video, regardless of their original video.
+        imported.videoId = videoId;
+        imported.videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        imported.videoTitle = currentVideoTitle() || project.videoTitle;
         if (!replaceAllowed()) return; project = imported;
       } else {
-        const blocks = C.parseLrc(text); if (!replaceAllowed()) return; project.blocks = blocks;
+        const blocks = C.importLyrics(text); if (!replaceAllowed()) return; project.blocks = blocks;
       }
       selected = 0; refresh(); save();
     } catch (error) { fail(error); } finally { importFile.value = ""; }
   });
-  button("Export project JSON", manual, () => {
+  const exportButton = button("Export project JSON", manual, () => {
     requireProject();
     project.videoTitle = currentVideoTitle() || project.videoTitle;
     const text = JSON.stringify(C.validate(project), null, 2);
     const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = el("a", null, root, { href: url, download: `karaoke-${videoId}.json` }); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
+  for (const timed of [true, false]) button(timed ? "Export timed LRC" : "Export untimed LRC", manual, () => {
+    requireProject();
+    const text = C.exportLrc(project, timed);
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const link = el("a", null, root, { href: url, download: `karaoke-${videoId}${timed ? "" : "-untimed"}.lrc` });
+    link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  el("p", "Project JSON preserves the complete project. LRC exports original lyrics only, with or without timing. Timed export requires every line to have a start time and includes the delay.", manual, { class: "muted" });
+  const tutorial = KaraokeTutorial.create({ root, panel, trigger: tutorialButton, storage: browser.storage.local, steps: [
+    { id: "search", chapter: "Basics", title: "Find your song", target: () => query, text: "Find lyrics checks the karaoke catalog for an exact YouTube video match. If available, use Load catalog lyrics. You can always search LRCLIB by song title or artist instead; choose a recording and click Use selected lyrics. Timed lyrics are the quickest start; live performances may need timing corrections. You can try every control while this guide stays open." },
+    { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Add furigana (small kana above kanji to show pronunciation) using the EDICT2 and ENAMDICT dictionaries. The dictionaries download on first use; lyrics are processed locally. This adds pronunciation help, not translations. Show furigana turns it on or off. Check the readings against the singing." },
+    { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics in the Line editor, or change the translation underneath. Changing original text clears that line’s furigana readings, so generate them again afterward. No lines yet? Search for lyrics or use Import / export." },
+    { id: "readings", chapter: "Basics", title: "Correct readings", target: () => rows.querySelector(".block.selected .furigana-editor") || rows.querySelector(".furigana-editor") || generateFurigana, text: "Edit furigana readings shows the kana for each annotated part of a line. Correct a reading to match the singing; changes save automatically. If no readings are available yet, generate furigana first." },
+    { id: "global-timing", chapter: "Basics", title: "Align the whole song", target: () => startAt, text: "Enter when the first lyric starts, for example 0:33. Or select a line and click Sync with video position as it is sung. For timed lyrics, this shifts the song together. For fine adjustments, enter a precise Start at time, such as 0:33.250." },
+    { id: "line-timing", chapter: "Basics", title: "Time individual lines", target: () => rows.querySelector(".block.selected .row + .row, .block .row + .row") || editor, text: "Enter Start and End as minutes:seconds (for example 3:32 or 3:32.250). Start edits shift that line and following lines; End edits only change that line’s end. Leave End blank to continue until the next timed line. Untimed lyrics need a Start time for every line." },
+    { id: "play", chapter: "Basics", title: "Ready to sing", target: () => fontSize, text: "Opening Settings turns Karaoke on automatically; closing Settings leaves it on. Use Karaoke below the video (default shortcut Alt+K) to turn it off or on. Adjust text size, position and Show next line here. Your edits save locally per video. That is the basic workflow! Close this guide to sing, or choose Next for optional advanced features; Tutorial resumes here." },
+    { id: "ai", chapter: "Advanced", title: "Translate with AI", target: () => apiKey, text: "Enter your OpenAI API key, choose a model and target language, then click Translate all lines. This optional action sends original lyrics to OpenAI and incurs API charges. Your key is saved locally and excluded from project exports. Review the resulting translation." },
+    { id: "ai-furigana", chapter: "Advanced", title: "Generate contextual readings", target: () => aiFuriganaButton, text: "AI Generate furigana uses the full song text as context with the same key and model. It does not listen to the performance. Regeneration asks before replacing existing readings, including your corrections; review the result against the singing." },
+    { id: "terms", chapter: "Advanced", title: "Fix a recurring reading", target: () => correctionTerm, text: "Enter a term and its kana reading to correct every exact occurrence in this song. Per-line furigana shortcuts can fill these fields for you. This changes this project, not a global dictionary." },
+    { id: "structure", chapter: "Advanced", title: "Adapt a live performance", target: () => rows.querySelector(".block.selected .row, .block .row") || editor, text: "Use Add line before or Add line after for extra vocals, Repeat for a repeated lyric, arrows to reorder and Delete to remove a line. Repeated lines need their own timing. Jump to previews a timed line. Set its End before the next line’s Start to create a gap for an instrumental passage." },
+    { id: "export", chapter: "Files", title: "Back up to your computer", target: () => exportButton, text: "Export project JSON saves originals, translations, furigana, timing and video information in one file on your computer. Use it as a backup before replacing lyrics or to share your work. API keys and GitHub tokens are never included. Export timed LRC shares original lyrics with video timing; Export untimed LRC shares original lyrics without timestamps. LRC does not preserve translations, furigana or project metadata; use JSON for a complete backup." },
+    { id: "import", chapter: "Files", title: "Import lyrics from a file", target: () => importFile, text: "Import a project JSON to load its lyrics, translations, furigana and timing into the current video. No video matching is performed. Choose an LRC file to import lyrics with or without timestamps. Untimed lyrics still need timing in Line editor. Replacement asks for confirmation." },
+  ] });
   function replaceAllowed() { return !project.blocks.length || window.confirm("Replace the current lyrics and timing? Export your project first if you want to keep a copy."); }
   const editor = section("Line editor"); editor.open = true;
   editor.before(termCorrection);
-  el("p", "Select a line, then mark it as the vocals begin. Alt+Shift+M marks the next line while this editor is open (outside text fields). Times are video seconds, including the delay. Blank end times last until the next timed line.", editor, { class: "muted" });
+  el("p", "Enter video times as minutes:seconds (for example 3:32 or 3:32.250), including the delay. Blank end times last until the next timed line.", editor, { class: "muted" });
   const clock = el("p", "", editor);
-  const stampButton = button("Mark selected line now", editor, mark);
-  button("End previous line now", editor, () => {
-    requireProject(); const row = project.blocks[selected - 1]; if (!row || row.start === null) throw new Error("Mark a line first.");
-    const end = playbackTime(); if (end <= row.start) throw new Error("End time must follow the start."); row.end = end; renderRows(); save();
-  });
-  button("Add line", editor, () => { requireProject(); project.blocks.push(C.block()); selected = project.blocks.length - 1; renderRows(); save(); });
   const rows = el("div", null, editor, { id: "rows" });
   const sources = section("Source");
   function renderSources() {
@@ -644,25 +791,37 @@
     updateVideoTitle();
     renderRows(); renderSources();
   }
+  function insertLine(index) {
+    requireProject();
+    project.blocks.splice(index, 0, C.block());
+    selected = index;
+    renderRows(); save();
+  }
   function renderRows() {
     rows.replaceChildren();
+    if (!project?.blocks.length) button("Add first line", rows, () => insertLine(0));
     project?.blocks.forEach((row, index) => {
       const box = el("div", null, rows, { class: `block${index === selected ? " selected" : ""}` });
       const actions = el("div", null, box, { class: "row" });
-      button(`${index === selected ? "● " : ""}Line ${index + 1}`, actions, () => { selected = index; renderRows(); });
-      button("Seek", actions, () => { if (row.start === null || !video()) throw new Error("Set a start time first."); video().currentTime = Math.max(0, row.start + project.offset); });
+      el("span", `Line ${index + 1}`, actions, { style: "font-weight:600" });
+      button("Add line before", actions, () => insertLine(index));
+      button("Add line after", actions, () => insertLine(index + 1));
+      button("Jump to", actions, () => { if (row.start === null || !video()) throw new Error("Set a start time first."); video().currentTime = Math.max(0, row.start + project.offset); });
       button("↑", actions, () => { if (index) { [project.blocks[index - 1], project.blocks[index]] = [row, project.blocks[index - 1]]; selected = index - 1; renderRows(); save(); } }).ariaLabel = "Move line up";
       button("↓", actions, () => { if (index < project.blocks.length - 1) { [project.blocks[index + 1], project.blocks[index]] = [row, project.blocks[index + 1]]; selected = index + 1; renderRows(); save(); } }).ariaLabel = "Move line down";
       button("Repeat", actions, () => { project.blocks.splice(index + 1, 0, { ...C.block(row.text), translations: { ...row.translations }, ...(row.furigana ? { furigana: structuredClone(row.furigana) } : {}) }); selected = index + 1; renderRows(); save(); });
-      button("Delete", actions, () => { if (!window.confirm(`Delete line ${index + 1}?`)) return; project.blocks.splice(index, 1); selected = Math.min(selected, project.blocks.length); renderRows(); save(); });
+      button("Delete", actions, () => { const dirty = row.text.trim() || Object.values(row.translations).some(text => text.trim()) || row.start !== null || row.end !== null || row.furigana?.length; if (dirty && !window.confirm(`Delete line ${index + 1}?`)) return; project.blocks.splice(index, 1); selected = Math.min(selected, project.blocks.length); renderRows(); save(); });
       const times = el("div", null, box, { class: "row" });
       for (const key of ["start", "end"]) {
-        const field = input(key === "start" ? "Start (s)" : "End (s)", times, row[key] === null ? "" : Number((row[key] + project.offset).toFixed(3)), "number"); field.step = "0.001";
+        const field = input(key === "start" ? "Start" : "End", times, row[key] === null ? "" : formatTime(row[key] + project.offset));
+        field.placeholder = "0:32.250";
+        field.style.width = "110px";
         field.addEventListener("change", () => { const previous = row[key];
           try {
-            if (key === "start") C.moveLineStart(project, row, field.value === "" ? null : Number(field.value));
+            const time = parseLineTime(field.value);
+            if (key === "start") C.moveLineStart(project, row, time);
             else {
-              row.end = field.value === "" ? null : Number((Number(field.value) - project.offset).toFixed(3));
+              row.end = time === null ? null : Number((time - project.offset).toFixed(3));
               C.validate(project);
             }
             updateTimingFields(); renderRows(); save();
@@ -672,7 +831,7 @@
       const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; delete row.furigana; furiganaEditor?.remove(); save(); });
       let furiganaEditor;
       if (row.furigana) {
-        furiganaEditor = el("details", null, box);
+        furiganaEditor = el("details", null, box, { class: "furigana-editor" });
         el("summary", "Edit furigana readings", furiganaEditor);
         button("Correct a combined term throughout this song", furiganaEditor, () => {
           termCorrection.open = true;
@@ -698,7 +857,6 @@
       const translation = input(`Translation (${project.translationLanguage})`, box, row.translations[project.translationLanguage] || "", "textarea");
       translation.addEventListener("input", () => { row.translations[project.translationLanguage] = translation.value; save(); });
     });
-    stampButton.textContent = selected < (project?.blocks.length || 0) ? `Mark line ${selected + 1} now` : "All lines marked — select a line to retime";
   }
   function mark() {
     requireProject(); C.stamp(project.blocks, selected, playbackTime()); selected++; renderRows(); save();
@@ -712,11 +870,6 @@
   }, true);
   // Keep editor keystrokes from reaching YouTube's global playback shortcuts.
   panel.addEventListener("keydown", event => event.stopPropagation());
-  browser.runtime.onMessage.addListener(message => {
-    if (message.type === "get-state") return Promise.resolve({ enabled });
-    if (message.type === "toggle-enabled") return Promise.resolve(setEnabled(!enabled));
-    if (message.type === "open-editor") { panel.hidden = false; return Promise.resolve({ enabled }); }
-  });
   const overlayHost = document.createElement("div");
   overlayHost.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:60";
   const overlayRoot = overlayHost.attachShadow({ mode: "open" }); overlayRoot.append(style.cloneNode(true));
@@ -748,7 +901,8 @@
     if (container && host.parentNode !== container) container.append(host);
     const currentId = location.pathname === "/watch" ? new URL(location.href).searchParams.get("v") : null;
     if (currentId !== videoId) {
-      videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); translationDraft.value = ""; translationWarning.hidden = true; originalDraft.value = ""; automaticStatus.textContent = ""; generation++;
+      videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); automaticStatus.textContent = ""; generation++;
+      matchingCatalog.replaceChildren();
       catalogEntries = []; catalogSource = null; repositoryResults.replaceChildren(); repositoryQuery.value = ""; repositoryNotify("");
       query.value = ""; queryDirty = false; queryReady = false;
       const token = generation; refresh(); notify("");
@@ -772,11 +926,13 @@
           if (token !== generation) return;
           project = saved ? C.validate(saved) : C.project(requestedId, document.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || document.title.replace(/ - YouTube$/, ""));
           project.translationLanguage = preferredLanguage;
-          refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics or paste your own.");
+          refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics, import a file or create lines.");
         }).catch(fail);
       }
     }
     updateVideoTitle();
+    if (!panel.hidden && project && checkedCatalogGeneration !== generation) void findCatalogMatch();
+    tutorial.maybeStart(!!project && !!currentId);
     
     const active = project && media ? C.activeBlock(project.blocks, media.currentTime, project.offset) : null;
     overlay.hidden = !enabled || !active || !currentId || player?.classList.contains("ad-showing");
@@ -790,5 +946,10 @@
   }
   document.body.append(host);
   tick(); setInterval(tick, 100);
-  mountInlineButton(); setInterval(mountInlineButton, 1000);
+  globalThis.KaraokeUI = type => {
+    if (type === "toggle-enabled") return setEnabled(!enabled);
+    if (type === "toggle-editor") return setEditorOpen(panel.hidden);
+    if (type === "open-editor") return setEditorOpen(true);
+    return { enabled };
+  };
 })();

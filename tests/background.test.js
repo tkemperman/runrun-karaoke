@@ -108,15 +108,17 @@ test('AI furigana uses the stored key and keeps the key out of results', async (
 });
 
 const settingsSender = { url: 'moz-extension://test/src/settings.html' };
-test('repository credentials can only be configured by settings and are never returned to YouTube', async () => {
+test('repository credentials can only be configured by settings and are never returned to either interface', async () => {
   const h = harness();
   const settings = { retrieval: { repo: 'community/lyrics' }, publishing: { repo: 'me/lyrics' } };
   assert.match((await h.request({ type: 'save-repository-settings', settings, token: 'secret' })).error, /Settings/);
-  assert.equal((await h.request({ type: 'save-repository-settings', settings, token: 'secret' }, settingsSender)).data.hasToken, true);
+  const savedResponse = (await h.request({ type: 'save-repository-settings', settings, token: 'secret' }, settingsSender)).data;
+  assert.equal(savedResponse.hasToken, true);
+  assert.equal(savedResponse.token, undefined);
   const loaded = (await h.request({ type: 'repository-settings' })).data;
   assert.equal(loaded.retrieval.repo, 'community/lyrics');
   assert.equal(loaded.token, undefined);
-  assert.equal((await h.request({ type: 'repository-settings' }, settingsSender)).data.token, 'secret');
+  assert.equal((await h.request({ type: 'repository-settings' }, settingsSender)).data.token, undefined);
   assert.equal(loaded.hasToken, true);
   await h.request({ type: 'save-repository-settings', settings }, settingsSender);
   assert.equal(h.saved.repositorySettings.token, 'secret');
@@ -137,4 +139,29 @@ test('repository publication uses only saved credentials and rejects changed des
   assert.equal(received[4], 'Actual video title');
   assert.match((await h.request({ ...message, target: { repo: 'someone/else', branch: 'main' } })).error, /changed/);
   assert.match((await h.request({ type: 'repository-load', source: { repo: 'stale/repo' } })).error, /changed/);
+});
+
+test('public catalog lookup uses the fixed repository and returns only exact video matches', async () => {
+  const calls = [];
+  const h = harness({}, {}, {
+    catalog: async source => {
+      calls.push(source);
+      return [
+        { videoId: 'h3chCOV_phw', file: 'translations/match/en.json' },
+        { videoId: 'abcdefghijk', file: 'translations/other/en.json' }
+      ];
+    },
+    retrieve: async (source, file, videoId) => { calls.push({ source, file, videoId }); return C.project(videoId); }
+  });
+  h.saved.repositorySettings = { retrieval: { repo: 'other/repo', branch: 'custom' }, token: 'private' };
+  const result = await h.request({ type: 'catalog-search', videoId: 'h3chCOV_phw' });
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].videoId, 'h3chCOV_phw');
+  assert.equal(calls[0].repo, 'tkemperman/runrun-karaoke-lyrics-catalog');
+  assert.equal(calls[0].branch, 'main');
+  const loaded = await h.request({ type: 'catalog-load', videoId: 'h3chCOV_phw', file: result.data[0].file });
+  assert.equal(loaded.data.videoId, 'h3chCOV_phw');
+  assert.equal(calls[1].source.repo, calls[0].repo);
+  assert.equal(h.saved.repositorySettings.token, 'private');
+  assert.match((await h.request({ type: 'catalog-search', videoId: 'invalid' })).error, /Invalid video ID/);
 });

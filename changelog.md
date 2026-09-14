@@ -1,6 +1,29 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.2.0 was released on September 12, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.0 was released on September 14, 2026.
+
+## 1.3.0 — Released 2026-09-14
+
+- Clear the GitHub token input after submission and keep saved tokens exclusively in background storage; Settings receives only saved-token status.
+
+- Replace Contact with inline About, showing the application name, installed version, © 2026 Thomas Kemperman and a contact email link with the application name as subject.
+- Show Privacy Policy inline from the bundled `privacy.md`, keeping the external and inline policy in sync. Keep About and Privacy Policy headings and right-aligned Close buttons visible while their bodies scroll.
+- Keep the Settings header compact before and during scrolling, with an opaque background that prevents content from overlapping the title. Use consistent Privacy Policy capitalization.
+- Move unimplemented managed contribution logging, identifiers, moderation and retention descriptions into the development TODO. Remove developer-only publication details from the user-facing policy and clarify extension-private API key storage.
+- Use `0:32.250` as the Start at, Start and End placeholder, showing millisecond syntax; simplify the line timing labels to Start and End.
+
+- Load the karaoke interface and Settings only on the first Karaoke or Settings action, including keyboard shortcuts and the toolbar launcher. YouTube pages initially load only the lightweight buttons; editor construction, project reads and playback polling wait until activation.
+
+- Add a resumable guided tutorial, simplified header controls and Contact email with the application name as subject. Separate lyric and reading corrections; the reading step expands its editor automatically. Omit the redundant manual-writing step.
+- Hide GitHub repository configuration behind the default-off localStorage developer flag without deleting saved settings.
+- Find lyrics checks the public catalog for exact YouTube-ID matches when Settings opens; LRCLIB remains available as an alternative. Catalog loading preserves edits made during downloads and confirms replacement.
+- Replace bulk lyrics/translation paste boxes with file import and per-line editing. JSON imports into the current video without matching; export complete JSON or original lyrics as timed/untimed LRC.
+- Use minutes:seconds timing fields and Start at / Sync instead of a separate delay input. Opening Settings enables Karaoke; closing it does not disable Karaoke.
+- Add per-line insertion before/after, show line numbers as plain labels, rename Seek to Jump to, and confirm deletion only for nonempty or timed lines. Remove timing stamp buttons from the editor and tutorial.
+- Clarify dictionary readings, planned translation submissions and privacy contact links. Managed submissions remain unimplemented.
+- Retain the previous tutorial video icon as a reserve asset; the Tutorial button currently has no icon.
+- Synchronize the repository template’s core copy. JavaScript syntax checks pass; 90 of 92 tests pass. Two credential tests fail because the existing temporary DISABLE_GITHUB_TOKEN switch disables token use; it remains enabled for local testing. Full Firefox acceptance testing remains outstanding.
+- Built dist/runrun-karaoke-1.3.0.zip and verified ZIP integrity and manifest version. The package is unsigned and has not been published.
 
 ## 1.2.0 — Released 2026-09-12
 
