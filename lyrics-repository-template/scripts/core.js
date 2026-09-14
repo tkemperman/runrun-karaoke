@@ -6,6 +6,7 @@
     return { id: id(), start, end, text, translations: {} };
   }
   function project(videoId, title = "") {
+    title = title.trim();
     return { schemaVersion: 3, furiganaEnabled: false, videoId, videoUrl: `https://www.youtube.com/watch?v=${videoId}`, videoTitle: title, title, artist: "", originalLanguage: "ja", translationLanguage: "en", offset: 0, source: null, blocks: [] };
   }
   function validate(value) {
@@ -23,6 +24,8 @@
     for (const key of ["videoTitle", "title", "artist", "originalLanguage", "translationLanguage"]) {
       if (typeof value[key] !== "string" || value[key].length > 2000) throw new Error(`Invalid ${key}.`);
     }
+    value.videoTitle = value.videoTitle.trim();
+    value.title = value.title.trim();
     if (!Number.isFinite(value.offset) || Math.abs(value.offset) > 86400) throw new Error("Invalid timing offset.");
     if (!Array.isArray(value.blocks) || value.blocks.length > 10000) throw new Error("Invalid block list.");
     if (value.schemaVersion < 3) {

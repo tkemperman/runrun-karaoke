@@ -1,6 +1,12 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.0 was released on September 14, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.1 was released on September 14, 2026.
+
+## 1.3.1 — Released 2026-09-14
+
+- Trim leading and trailing whitespace, including blank lines, from video and project titles when creating, importing and saving projects.
+- Keep the repository template's core validator aligned with the extension. JavaScript syntax checks pass; 94 of 95 tests pass. The existing temporary `DISABLE_GITHUB_TOKEN` switch causes the remaining credential test failure. Full Firefox acceptance testing remains outstanding.
+- Built `dist/runrun-karaoke-1.3.1.zip` and verified ZIP integrity, manifest version and bundled runtime files. The package is unsigned and has not been published.
 
 ## 1.3.0 — Released 2026-09-14
 

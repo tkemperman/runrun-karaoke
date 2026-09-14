@@ -209,3 +209,12 @@ test('untimed LRC imports metadata and lyrics; timed export rejects missing or n
   assert.throws(() => C.exportLrc(project), /Every line/);
   assert.throws(() => C.importLyrics('[ar:Example]\n'), /No lyrics/);
 });
+
+test('new and imported project titles trim surrounding whitespace only', () => {
+  const created = C.project('h3chCOV_phw', '\n\t Stay  With Me \r\n');
+  assert.equal(created.videoTitle, 'Stay  With Me');
+  assert.equal(created.title, 'Stay  With Me');
+  const imported = C.validate({ ...created, videoTitle: '\n Video \t', title: ' Song \r\n' });
+  assert.equal(imported.videoTitle, 'Video');
+  assert.equal(imported.title, 'Song');
+});

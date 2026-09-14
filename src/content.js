@@ -924,7 +924,7 @@
         });
         request({ type: "load", videoId }).then(saved => {
           if (token !== generation) return;
-          project = saved ? C.validate(saved) : C.project(requestedId, document.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || document.title.replace(/ - YouTube$/, ""));
+          project = saved ? C.validate(saved) : C.project(requestedId, document.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || document.title.replace(/ - YouTube$/, "").trim());
           project.translationLanguage = preferredLanguage;
           refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics, import a file or create lines.");
         }).catch(fail);
