@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: September 14, 2026
+Last updated: September 15, 2026
 
 ルンルンKARAOKE provides editable bilingual karaoke lyrics on YouTube. The extension does not include advertising, analytics, or telemetry.
 
@@ -17,6 +17,8 @@ The extension contacts the following services for their respective features:
 - **OpenAI:** When you request AI translation or AI furigana, the extension sends the project's lyrics, line identifiers, selected model, and target language where applicable to api.openai.com. Your OpenAI API key is sent to OpenAI for authentication. No video or audio is uploaded. Requests use `store: false`; this does not override OpenAI's own data retention policies.
 
 - **GitHub:** Opening Settings checks the public karaoke catalog for the current video by downloading its index from raw.githubusercontent.com and matching the YouTube ID locally. Loading a match downloads its project file. These public catalog requests do not require a GitHub account or token.
+
+- **YouTube:** Surprise Me sends candidate video URLs from the translations catalog to YouTube's oEmbed endpoint to skip removed videos before opening a random available video. Each unique candidate is checked at most once per click. No lyrics or translations are included in these checks.
 
 - **EDRDG:** Dictionary-based furigana downloads Japanese dictionaries from www.edrdg.org and processes lyrics locally. Lyrics are not sent to EDRDG.
 

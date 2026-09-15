@@ -74,6 +74,32 @@
   const headerActions = el("div", null, header, { class: "row", style: "flex-basis:100%;justify-content:flex-start" });
   const tutorialButton = button("Tutorial", headerActions, () => tutorial.open());
   tutorialButton.style.cssText = "display:inline-flex;align-items:center;gap:7px;background:#7542b5;border-color:#b58aef";
+  const surpriseButton = button("Surprise Me", headerActions, async () => {
+    surpriseButton.disabled = true;
+    surpriseButton.textContent = "Choosing…";
+    try {
+      const result = await request({ type: "repository-random", videoId });
+      if (!result.videoId) { surpriseButton.hidden = true; return; }
+      location.href = `https://www.youtube.com/watch?v=${result.videoId}`;
+    } catch (_) {
+      surpriseButton.hidden = true;
+    } finally {
+      surpriseButton.disabled = false;
+      surpriseButton.textContent = "Surprise Me";
+    }
+  });
+  surpriseButton.style.cssText = "background:#db2777;border-color:#f9a8d4";
+  surpriseButton.hidden = true;
+  let surpriseCheck = 0;
+  async function refreshSurpriseButton() {
+    const token = ++surpriseCheck, requestedId = videoId;
+    surpriseButton.hidden = true;
+    if (!requestedId || !/^[\w-]{11}$/.test(requestedId)) return;
+    try {
+      const result = await request({ type: "repository-random-available", videoId: requestedId });
+      if (token === surpriseCheck && videoId === requestedId) surpriseButton.hidden = !result.available;
+    } catch (_) { /* An unavailable or unconfigured repository keeps this optional button hidden. */ }
+  }
   const privacyButton = button("Privacy Policy", headerActions, async () => {
     tutorial.close(false);
     setAboutOpen(false);
@@ -203,7 +229,7 @@
   function setEnabled(value) { enabled = value; globalThis.KaraokeSetPressed?.(enabled); if (enabled && !project?.blocks.length) panel.hidden = false; return { enabled }; }
   function setEditorOpen(open) {
     panel.hidden = !open;
-    if (open) setEnabled(true);
+    if (open) { setEnabled(true); void refreshSurpriseButton(); }
     return { enabled };
   }
   el("label", "Start at", display, { for: "lyrics-start-at" });
@@ -752,6 +778,7 @@
   });
   el("p", "Project JSON preserves the complete project. LRC exports original lyrics only, with or without timing. Timed export requires every line to have a start time and includes the delay.", manual, { class: "muted" });
   const tutorial = KaraokeTutorial.create({ root, panel, trigger: tutorialButton, storage: browser.storage.local, steps: [
+    { id: "surprise", chapter: "Basics", title: "Surprise me", target: () => surpriseButton, text: "Surprise Me opens a random YouTube video from the translations catalog." },
     { id: "search", chapter: "Basics", title: "Find your song", target: () => query, text: "Find lyrics checks the karaoke catalog for an exact YouTube video match. If available, use Load catalog lyrics. You can always search LRCLIB by song title or artist instead; choose a recording and click Use selected lyrics. Timed lyrics are the quickest start; live performances may need timing corrections. You can try every control while this guide stays open." },
     { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Add furigana (small kana above kanji to show pronunciation) using the EDICT2 and ENAMDICT dictionaries. The dictionaries download on first use; lyrics are processed locally. This adds pronunciation help, not translations. Show furigana turns it on or off. Check the readings against the singing." },
     { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics in the Line editor, or change the translation underneath. Changing original text clears that line’s furigana readings, so generate them again afterward. No lines yet? Search for lyrics or use Import / export." },
@@ -902,6 +929,7 @@
     const currentId = location.pathname === "/watch" ? new URL(location.href).searchParams.get("v") : null;
     if (currentId !== videoId) {
       videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); automaticStatus.textContent = ""; generation++;
+      surpriseCheck++; surpriseButton.hidden = true;
       matchingCatalog.replaceChildren();
       catalogEntries = []; catalogSource = null; repositoryResults.replaceChildren(); repositoryQuery.value = ""; repositoryNotify("");
       query.value = ""; queryDirty = false; queryReady = false;
@@ -926,6 +954,8 @@
           if (token !== generation) return;
           project = saved ? C.validate(saved) : C.project(requestedId, document.querySelector("ytd-watch-metadata h1")?.textContent?.trim() || document.title.replace(/ - YouTube$/, "").trim());
           project.translationLanguage = preferredLanguage;
+          searchSection.open = !project.blocks.length;
+          void refreshSurpriseButton();
           refresh(); notify(saved ? "Loaded saved project." : "Search for lyrics, import a file or create lines.");
         }).catch(fail);
       }

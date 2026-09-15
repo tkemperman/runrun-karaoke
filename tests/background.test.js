@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const C = require('../src/core.js');
 
-function harness(translation = {}, dictionary = {}, repositories = require("../src/repositories.js")) {
+function harness(translation = {}, dictionary = {}, repositories = require("../src/repositories.js"), globals = {}) {
   const saved = {}; const sent = []; let listener, command;
   const browser = {
     runtime: { getURL: path => `moz-extension://test/${path}`, onMessage: { addListener(fn) { listener = fn; } } },
@@ -15,7 +15,7 @@ function harness(translation = {}, dictionary = {}, repositories = require("../s
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary, ...globals});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {
@@ -164,4 +164,74 @@ test('public catalog lookup uses the fixed repository and returns only exact vid
   assert.equal(calls[1].source.repo, calls[0].repo);
   assert.equal(h.saved.repositorySettings.token, 'private');
   assert.match((await h.request({ type: 'catalog-search', videoId: 'invalid' })).error, /Invalid video ID/);
+});
+test('Surprise Me chooses a different unique video from the configured retrieval repository', async () => {
+  const h = harness({}, {}, { ...require('../src/repositories.js'),
+    catalog: async source => {
+      assert.equal(source.repo, 'community/lyrics');
+      return [
+        { videoId: 'h3chCOV_phw' },
+        { videoId: 'abcdefghijk' },
+        { videoId: 'abcdefghijk' }
+      ];
+    }
+  });
+  const settings = { retrieval: { repo: 'community/lyrics' } };
+  await h.request({ type: 'save-repository-settings', settings }, settingsSender);
+  const result = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
+  assert.equal(result.data.videoId, 'abcdefghijk');
+});
+test('Surprise Me has no result for an unconfigured repository or a catalog containing only the current video', async () => {
+  let catalogCalls = 0;
+  const h = harness({}, {}, { ...require('../src/repositories.js'), catalog: async () => {
+    catalogCalls++;
+    return [{ videoId: 'h3chCOV_phw' }, { videoId: 'h3chCOV_phw' }];
+  } });
+  assert.equal((await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' })).data.videoId, null);
+  assert.equal(catalogCalls, 0);
+  await h.request({ type: 'save-repository-settings', settings: { retrieval: { repo: 'community/lyrics' } } }, settingsSender);
+  assert.equal((await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' })).data.videoId, null);
+  assert.equal(catalogCalls, 1);
+});
+test('Surprise Me rickrolls only once each April Fools year before returning to repository videos', async () => {
+  const RealDate = Date;
+  class AprilFoolsDate extends RealDate {
+    constructor(...args) { super(...(args.length ? args : ['2027-04-01T12:00:00'])); }
+  }
+  const h = harness({}, {}, { ...require('../src/repositories.js'), catalog: async () => [{ videoId: 'abcdefghijk' }] }, { Date: AprilFoolsDate });
+  await h.request({ type: 'save-repository-settings', settings: { retrieval: { repo: 'community/lyrics' } } }, settingsSender);
+  const availability = await h.request({ type: 'repository-random-available', videoId: 'h3chCOV_phw' });
+  assert.equal(availability.data.available, true);
+  const first = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
+  assert.equal(first.data.videoId, '668r-uYMFfA');
+  assert.equal(h.saved.surpriseRickrollYear, 2027);
+  const second = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
+  assert.equal(second.data.videoId, 'abcdefghijk');
+});
+test('Surprise Me skips deleted YouTube videos and automatically tries the next random candidate', async () => {
+  const checked = [];
+  const h = harness({}, {}, { ...require('../src/repositories.js'), catalog: async () => [
+    { videoId: 'abcdefghijk' }, { videoId: 'zyxwvutsrqp' }
+  ] }, {
+    AbortSignal: { timeout: () => undefined },
+    Math: { floor: Math.floor, random: () => 0.9 },
+    fetch: async url => { checked.push(url); return { status: url.includes('abcdefghijk') ? 404 : 200 }; }
+  });
+  await h.request({ type: 'save-repository-settings', settings: { retrieval: { repo: 'community/lyrics' } } }, settingsSender);
+  const result = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
+  assert.equal(result.data.videoId, 'zyxwvutsrqp');
+  assert.equal(checked.length, 2);
+});
+test('Surprise Me stops after checking every unique candidate when all catalog videos are deleted', async () => {
+  let checks = 0;
+  const h = harness({}, {}, { ...require('../src/repositories.js'), catalog: async () => [
+    { videoId: 'abcdefghijk' }, { videoId: 'abcdefghijk' }, { videoId: 'zyxwvutsrqp' }
+  ] }, {
+    AbortSignal: { timeout: () => undefined },
+    fetch: async () => { checks++; return { status: 404 }; }
+  });
+  await h.request({ type: 'save-repository-settings', settings: { retrieval: { repo: 'community/lyrics' } } }, settingsSender);
+  const result = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
+  assert.equal(result.data.videoId, null);
+  assert.equal(checks, 2);
 });

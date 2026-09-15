@@ -1,11 +1,21 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.1 was released on September 14, 2026.
+This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.2 was released on September 15, 2026.
+
+## 1.3.2 — Released 2026-09-15
+
+- Open **Find lyrics** by default when the current video has no saved lyric lines, while leaving it closed for projects that already contain lyrics.
+- Add the pink **Surprise Me** header button and a Basics tutorial step. It chooses a random different video from the translations catalog, checks shuffled unique candidates with YouTube, skips removed videos, and stops after every candidate has been tried. The button stays hidden when no alternative is available or the catalog cannot be read.
+- On April 1, make the first **Surprise Me** click of each year open `668r-uYMFfA`; remember that year locally and use normal catalog selection for subsequent clicks until the next April 1.
+- Restore use of saved GitHub credentials for repository inspection and publication by removing the temporary token-disable switch.
+- JavaScript syntax checks and all 100 automated tests pass. The unsigned private-development and public-distribution configurations share this version; full Firefox acceptance testing remains outstanding.
+- Built `dist/runrun-karaoke-1.3.2.zip` and verified ZIP integrity, manifest version 1.3.2 and an exact bundled copy of the updated privacy policy. The package is unsigned and has not been published.
+- Added a reproducible `npm run package:local` target and built `dist/runrun-karaoke-1.3.2-local.zip` with display version `1.3.2-local` and Firefox internal version `1.3.2.1`.
 
 ## 1.3.1 — Released 2026-09-14
 
 - Trim leading and trailing whitespace, including blank lines, from video and project titles when creating, importing and saving projects.
-- Keep the repository template's core validator aligned with the extension. JavaScript syntax checks pass; 94 of 95 tests pass. The existing temporary `DISABLE_GITHUB_TOKEN` switch causes the remaining credential test failure. Full Firefox acceptance testing remains outstanding.
+- Keep the repository template's core validator aligned with the extension. At release time, JavaScript syntax checks passed and 94 of 95 tests passed; authenticated publication was still disabled by a temporary local testing switch. Full Firefox acceptance testing remained outstanding.
 - Built `dist/runrun-karaoke-1.3.1.zip` and verified ZIP integrity, manifest version and bundled runtime files. The package is unsigned and has not been published.
 
 ## 1.3.0 — Released 2026-09-14
@@ -28,7 +38,7 @@ This file tracks release status and planned scope. Planned features are not a re
 - Add per-line insertion before/after, show line numbers as plain labels, rename Seek to Jump to, and confirm deletion only for nonempty or timed lines. Remove timing stamp buttons from the editor and tutorial.
 - Clarify dictionary readings, planned translation submissions and privacy contact links. Managed submissions remain unimplemented.
 - Retain the previous tutorial video icon as a reserve asset; the Tutorial button currently has no icon.
-- Synchronize the repository template’s core copy. JavaScript syntax checks pass; 90 of 92 tests pass. Two credential tests fail because the existing temporary DISABLE_GITHUB_TOKEN switch disables token use; it remains enabled for local testing. Full Firefox acceptance testing remains outstanding.
+- Synchronize the repository template’s core copy. At release time, JavaScript syntax checks passed and 90 of 92 tests passed because authenticated publication was still disabled by a temporary local testing switch. Full Firefox acceptance testing remained outstanding.
 - Built dist/runrun-karaoke-1.3.0.zip and verified ZIP integrity and manifest version. The package is unsigned and has not been published.
 
 ## 1.2.0 — Released 2026-09-12

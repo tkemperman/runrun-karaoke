@@ -17,9 +17,9 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.3.0 was released on September 14, 2026**, simplifying lyrics discovery, timing, line editing and the tutorial. See [changelog.md](changelog.md) for the release history. The release package is unsigned; full Firefox acceptance testing remains outstanding.
+Version **1.3.2 was released on September 15, 2026**, improving lyrics discovery, adding Surprise Me and restoring authenticated GitHub publication. See [changelog.md](changelog.md) for details. The release package is unsigned; full Firefox acceptance testing remains outstanding.
 
-Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, LRCLIB search, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
+Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog and LRCLIB discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
 ## GitHub lyrics repositories
 
@@ -37,16 +37,17 @@ In the lyrics editor, open **Lyrics repositories · GitHub**:
 
 Repository folder titles come from the current YouTube video, independently of the lyric/translation title. Folder titles use lowercase Unicode letters and numbers (including Japanese), with whitespace and punctuation converted to single hyphens. Repeated hyphens collapse and leading/trailing hyphens are removed. Slugs are limited to 220 UTF-8 bytes; empty slugs use `untitled`. The YouTube ID keeps its original case. Matching and loading use the exact YouTube video ID, independently of the title or folder name. Existing ID-only catalog paths remain readable. Changing the YouTube video title changes its upload path.
 
-The Action regenerates `index.json` after uploads. Search again after it finishes; raw GitHub caching can delay visibility. This version supports one retrieval source and one upload destination, with user-triggered developer actions. Separately, opening Settings checks the built-in public catalog. The current testing switch DISABLE_GITHUB_TOKEN in src/background.js disables authenticated publication without deleting the saved token. The API integration follows [GitHub's repository contents API](https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10).
+The Action regenerates `index.json` after uploads. Search again after it finishes; raw GitHub caching can delay visibility. This version supports one retrieval source and one upload destination, with user-triggered developer actions. Separately, opening Settings checks the built-in public catalog. Authenticated inspection and publication use the saved token exclusively in the background. The API integration follows [GitHub's repository contents API](https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10).
 
 Validation for the current release is recorded in the changelog. Existing GitHub catalog projects have been migrated and their index validated locally. Full Firefox interaction, extension-driven authenticated publication and hosted Action verification remain outstanding.
 
 ## Feature scope
 
-### Version 1.3.0
+### Version 1.3.2
 
 - Line-based karaoke overlay with translations directly underneath.
 - Lyrics lookup through LRCLIB, with recording selection and manual search corrections.
+- Exact-video catalog lookup and random catalog discovery through **Surprise Me**.
 - Per-line lyrics and translation entry, project JSON import/export, and timed or untimed LRC import/export.
 - A timing editor for live arrangements, repeated lines, and instrumental breaks.
 - Per-video timing offsets and local project storage.
@@ -86,11 +87,11 @@ The downloaded page identifies the video as “FuwaMoco x Senchou Sing - Ahoy!�
 
 On `https://www.youtube.com/*`, only the lightweight Karaoke and Settings buttons load initially. The interface scripts, project reads and playback polling start on the first Karaoke or Settings action, including shortcuts and the toolbar launcher. Once activated, the interface remains loaded for that page even after closing Settings or disabling Karaoke. The extension’s background component loads separately at extension startup.
 
-Settings has a compact pinned header with **Tutorial**, **Privacy Policy** and **About**. Privacy Policy and About open inline, with their headings and right-aligned **Close** buttons remaining visible while their contents scroll. About shows the application name, installed version, © 2026 Thomas Kemperman and the contact email with the application name as subject. Privacy Policy reads the bundled [privacy.md](privacy.md), which is also the external policy’s single source of truth.
+Settings has a compact pinned header with **Tutorial**, the pink **Surprise Me** button, **Privacy Policy** and **About**. Surprise Me opens a random video from the translations catalog and is hidden when no different candidate is available. Privacy Policy and About open inline, with their headings and right-aligned **Close** buttons remaining visible while their contents scroll. About shows the application name, installed version, © 2026 Thomas Kemperman and the contact email with the application name as subject. Privacy Policy reads the bundled [privacy.md](privacy.md), which is also the external policy’s single source of truth.
 
 New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. The add-on uses Firefox Manifest V2, requires Firefox 142 or newer, and requires no build step.
 
-Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects and saved keys stay in extension-local storage except for these service requests and user-triggered exports. Opening Settings automatically downloads the public catalog index; video-ID matching happens locally. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
+Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Surprise Me reads the translations catalog and asks YouTube whether shuffled candidate IDs are still available before opening one. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects, saved keys and the year of the latest 1-april Surprise Me result stay in extension-local storage except for these service requests and user-triggered exports. Opening Settings automatically downloads the public catalog index; video-ID matching happens locally. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
 
 ## First playback test
 
@@ -188,16 +189,18 @@ Use English for code comments, identifiers, documentation, commit messages, and 
 
 Run `npm test` for the core, search, translation, furigana, repository, launcher, bootstrap, tutorial and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.3.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.3.2.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
+
+Run `npm run package:local` to create `dist/runrun-karaoke-1.3.2-local.zip` for temporary Firefox testing. Its display version is `1.3.2-local` and its internal Firefox version is `1.3.2.1`, keeping it distinguishable from the public 1.3.2 package without changing source version metadata.
 
 ### Guided tutorial
 
 After activating the interface, the tutorial opens Settings automatically once the video project is ready, if no previous tutorial visit has been saved. The purple **Tutorial** button in Settings reopens it at your saved step. Use **Previous**, **Next**, the chapter menu, or **×** (Escape) to navigate or stop. Progress is stored locally, separately from song projects.
 
-The seven basic steps cover database search, dictionary furigana, lyric editing, reading corrections, global and individual timing, and playback. Correct readings automatically expands Edit furigana readings. Optional chapters cover AI translations, contextual furigana, recurring term corrections, live arrangements, computer backups and imports. Developer repository setup and publication are excluded. Controls remain usable during the guide; advancing a step does not run any action. On narrow screens the guide appears below Settings.
+The eight basic steps cover Surprise Me, database search, dictionary furigana, lyric editing, reading corrections, global and individual timing, and playback. Correct readings automatically expands Edit furigana readings. Optional chapters cover AI translations, contextual furigana, recurring term corrections, live arrangements, computer backups and imports. Developer repository setup and publication are excluded. Controls remain usable during the guide; advancing a step does not run any action. On narrow screens the guide appears below Settings.
 
-**Find lyrics** checks the public karaoke catalog when Settings opens and offers matching projects for the exact YouTube video ID. Loading asks before replacing existing lyrics. **Search LRCLIB** remains available as an alternative, including when the catalog is unavailable.
+**Find lyrics** checks the public karaoke catalog when Settings opens and offers matching projects for the exact YouTube video ID. It opens by default when the video has no saved lyric lines. Loading asks before replacing existing lyrics. **Search LRCLIB** remains available as an alternative, including when the catalog is unavailable.
 
-The header places **Close** beside the title, with **Tutorial**, **Privacy Policy** and **About** below. About contains the contact email link with subject ルンルンKARAOKE. Tutorial has no icon; the previous video icon is retained as a reserve asset. Tutorial highlighting disappears when the guide closes.
+The header places **Close** beside the title, with **Tutorial**, **Surprise Me**, **Privacy Policy** and **About** below. Surprise Me chooses a different catalog video, checks each unique shuffled candidate at most once, skips removed videos and silently hides when no candidate is available. On April 1, its first click per year opens a fixed surprise before normal selection resumes; only the year is stored. About contains the contact email link with subject ルンルンKARAOKE. Tutorial has no icon; the previous video icon is retained as a reserve asset. Tutorial highlighting disappears when the guide closes.
 
 Each line offers **Add line before**, **Add line after**, **Jump to**, reorder arrows, **Repeat** and **Delete**. Jump to seeks the video to the line’s start including its offset, preserving paused playback. Empty projects offer **Add first line**. Delete asks for confirmation only if the line contains text, translations, furigana or timing.

@@ -1,7 +1,17 @@
 "use strict";
-// Temporary local testing switch: ignore the GitHub token without deleting it.
-const DISABLE_GITHUB_TOKEN = true;
 let furiganaMatcherPromise;
+async function youtubeVideoAvailable(videoId) {
+  try {
+    const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+    const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, {
+      credentials: "omit", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(10000)
+    });
+    return response.status !== 404;
+  } catch (_) {
+    // A network failure should not make the entire catalog appear unavailable.
+    return true;
+  }
+}
 async function furiganaMatcher() {
   if (!furiganaMatcherPromise) furiganaMatcherPromise = (async () => {
     const record = await KaraokeDictionary.load() || await KaraokeDictionary.download();
@@ -52,6 +62,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         break;
       }
       case "repository-search":
+      case "repository-random-available":
+      case "repository-random":
       case "repository-load":
       case "repository-inspect":
       case "repository-publish": {
@@ -61,14 +73,39 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
           data = await KaraokeRepositories.catalog(preferences.retrieval);
         }
+        if (message.type === "repository-random" || message.type === "repository-random-available") {
+          if (message.videoId !== null && message.videoId !== undefined && !/^[\w-]{11}$/.test(message.videoId)) throw new Error("Invalid video ID.");
+          const now = new Date();
+          const aprilFoolsYear = now.getMonth() === 3 && now.getDate() === 1 ? now.getFullYear() : null;
+          const prankKey = "surpriseRickrollYear";
+          const prankWasShown = aprilFoolsYear !== null && (await browser.storage.local.get(prankKey))[prankKey] === aprilFoolsYear;
+          if (aprilFoolsYear !== null && !prankWasShown) {
+            if (message.type === "repository-random") await browser.storage.local.set({ [prankKey]: aprilFoolsYear });
+            data = message.type === "repository-random" ? { videoId: "668r-uYMFfA" } : { available: true };
+            break;
+          }
+          if (!preferences.retrieval.repo) { data = message.type === "repository-random" ? { videoId: null } : { available: false }; break; }
+          const videoIds = [...new Set((await KaraokeRepositories.catalog(preferences.retrieval)).map(entry => entry.videoId))];
+          const alternatives = videoIds.filter(id => id !== message.videoId);
+          if (message.type === "repository-random-available") { data = { available: !!alternatives.length }; break; }
+          for (let index = alternatives.length - 1; index > 0; index--) {
+            const randomIndex = Math.floor(Math.random() * (index + 1));
+            [alternatives[index], alternatives[randomIndex]] = [alternatives[randomIndex], alternatives[index]];
+          }
+          let selectedVideoId = null;
+          for (const candidate of alternatives) {
+            if (await youtubeVideoAvailable(candidate)) { selectedVideoId = candidate; break; }
+          }
+          data = { videoId: selectedVideoId };
+        }
         if (message.type === "repository-load") {
           if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
           data = await KaraokeRepositories.retrieve(preferences.retrieval, message.file, message.videoId);
         }
-        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, DISABLE_GITHUB_TOKEN ? "" : saved.token, message.project, message.videoTitle), target: preferences.publishing };
+        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, saved.token, message.project, message.videoTitle), target: preferences.publishing };
         if (message.type === "repository-publish") {
           if (JSON.stringify(message.target) !== JSON.stringify(preferences.publishing)) throw new Error("Upload settings changed. Check the destination again.");
-          data = await KaraokeRepositories.publish(preferences.publishing, DISABLE_GITHUB_TOKEN ? "" : saved.token, message.project, message.sha, message.videoTitle);
+          data = await KaraokeRepositories.publish(preferences.publishing, saved.token, message.project, message.sha, message.videoTitle);
         }
         break;
       }
