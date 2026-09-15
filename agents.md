@@ -27,6 +27,7 @@ Use **AI translation** for optional OpenAI translation and contextual furigana g
 
 ## TODO
 
+- [ ] Allow users to show or hide the original lyrics and the translation independently.
 - [ ] Add a **Report abuse** button for lyrics loaded from the shared catalog so users can directly report vandalism or other inappropriate content. Allow an optional explanation and show confirmation after submission. Include the catalog repository, file/language, video ID, and loaded revision so maintainers can identify the reported content even if it later changes. Send reports to a private maintainer review queue without requiring a GitHub account; apply rate limits and duplicate handling to prevent report spam. Reports must not automatically delete lyrics or ban contributors: let maintainers inspect the content and use the contribution service's review/ban controls when appropriate. Explain report data and retention in the privacy policy before enabling reporting.
 - [ ] Allow users to add multiple GitHub repositories as retrieval/search sources and multiple publication destinations, selecting a destination for each publication.
 - [ ] Include `tkemperman/runrun-karaoke-lyrics-catalog` as both a default search source and the default publication destination.
