@@ -27,7 +27,7 @@ Use **AI translation** for optional OpenAI translation and contextual furigana g
 
 ## TODO
 
-- [ ] Check how AI translations are being handled: does it hardcoded say "translate from Japanese to target language", or does it say: "detect source language and translate to target language"?
+- [ ] AI translation: don't hardcode Japanese as source. Let the AI detect the source language and return it in the response. Make sure to send the correct source language to the translations repository.
 - [ ] When found lyrics are longer than the video, offer an option to trim the lyrics.
 - [ ] Remember text size and distance from the bottom for the translation itself, including in exports.
 - [ ] Allow users to show or hide the original lyrics and the translation independently.
