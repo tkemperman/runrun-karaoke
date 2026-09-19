@@ -27,6 +27,16 @@ Use **AI translation** for optional OpenAI translation and contextual furigana g
 
 ## TODO
 
+- [ ] The first time "Surprise Me" button is clicked, the use must choose in what languages they want to see videos (default locale and fallback are already selected). There must also be an option to select "all languages".
+- [ ] Karaoke button must be reset (turned off) after switching to a new video without the settings menu open.
+- [ ] Avanced timing helper: click to start/end lyrics a lyrics bar.
+- [ ] For songs without lyrics, developers window (Github) should always be fold out.
+- [ ] Let the user set its locale and its fallback locale. Use the locale(s) from the browser as default(s). When translating via AI translation, the primary locale is leading.
+- [ ] Surprise Me button should not only jump to random video, but also keep settings menu open and karaoke activated.
+- [ ] Always ask for confirmation before shifting the timing of the remaining lyrics.
+- [ ] Add option to translate romaji lyrics to kanji/kana (AI translation section).
+- [ ] Clear "Start at" time when switching lyrics.
+- [ ] Add button to clear/reset "Start at" time.  
 - [ ] AI translation: don't hardcode Japanese as source. Let the AI detect the source language and return it in the response. Make sure to send the correct source language to the translations repository.
 - [ ] When found lyrics are longer than the video, offer an option to trim the lyrics.
 - [ ] Remember text size and distance from the bottom for the translation itself, including in exports.
