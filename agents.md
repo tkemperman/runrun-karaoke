@@ -32,7 +32,7 @@ Use **AI translation** for optional OpenAI translation and contextual furigana g
 - [ ] Avanced timing helper: click to start/end lyrics a lyrics bar.
 - [ ] For songs without lyrics, developers window (Github) should always be fold out.
 - [ ] Let the user set its locale and its fallback locale. Use the locale(s) from the browser as default(s). When translating via AI translation, the primary locale is leading.
-- [ ] Surprise Me button should not only jump to random video, but also keep settings menu open and karaoke activated.
+- [ ] Surprise Me button should not only jump to random video, but also keep settings menu open and karaoke activated. **Exception is Aprils Fools'**.
 - [ ] Always ask for confirmation before shifting the timing of the remaining lyrics.
 - [ ] Add option to translate romaji lyrics to kanji/kana (AI translation section).
 - [ ] Clear "Start at" time when switching lyrics.
