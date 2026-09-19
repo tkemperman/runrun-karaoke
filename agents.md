@@ -27,6 +27,9 @@ Use **AI translation** for optional OpenAI translation and contextual furigana g
 
 ## TODO
 
+- [ ] Developers menu: add option to delete translation(s).
+- [ ] Allow to paste lyrics source directly, as an alternative for LRCLIB.
+- [ ] Allow line editor to work with multiple translation languages.
 - [ ] The first time "Surprise Me" button is clicked, the use must choose in what languages they want to see videos (default locale and fallback are already selected). There must also be an option to select "all languages".
 - [ ] Karaoke button must be reset (turned off) after switching to a new video without the settings menu open.
 - [ ] Avanced timing helper: click to start/end lyrics a lyrics bar.
