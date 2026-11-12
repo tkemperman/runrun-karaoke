@@ -12,6 +12,10 @@ manifest = json.loads((root / "manifest.json").read_text())
 version = manifest["version"]
 output = root / "dist" / f"runrun-karaoke-{version}{'-local' if args.local else ''}.zip"
 output.parent.mkdir(exist_ok=True)
+helper = root / "native-helper.zip"
+with zipfile.ZipFile(helper, "w", zipfile.ZIP_DEFLATED) as archive:
+    for name in ["helper.py", "install.py", "install.sh", "README.md"]:
+        archive.write(root / "native" / name, name)
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
     if args.local:
         manifest["version"] = f"{version}.1"
@@ -19,7 +23,7 @@ with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     else:
         archive.write(root / "manifest.json", "manifest.json")
-    for path in [root / "LICENSE", root / "privacy.md", *sorted((root / "src").glob("*"))]:
+    for path in [root / "LICENSE", root / "privacy.md", helper, *sorted((root / "src").glob("*"))]:
         if path.is_file():
             archive.write(path, path.relative_to(root))
 print(output)

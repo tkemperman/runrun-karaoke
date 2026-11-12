@@ -1,6 +1,19 @@
 # Changelog
 
-This file tracks release status and planned scope. Planned features are not a record of completed work. Version 1.3.2 was released on September 15, 2026.
+## 1.4.0 — Released 2026-11-12
+
+- Search now falls back from LRCLIB to Genius only when no usable lyric text is available. Results retain their provider and source link; blocked requests and network errors remain distinct from empty results.
+- AI features combines translation and optional, default-on furigana in one OpenAI request with atomic validation and joint replacement confirmation.
+- Added AudioShake line timing, recognition without a transcript, and realignment of existing lyrics for live performances/covers through Use existing lyrics. Results are staged for Apply/Discard; existing lyrics and annotations survive alignment. Interrupted requests resume the original task without automatic resubmission.
+- Added a Linux native helper, dependency/protocol checks, verified distribution-specific installation guidance, cancellation and temporary audio cleanup. Keys and task state stay outside project exports.
+
+- Added monthly cost estimates with per-month and per-model details, model-specific OpenAI token pricing and a configurable AudioShake credit price. The monthly total uses two decimal places; details retain four decimals and disclose unpriced requests.
+- Expanded Advanced → AI features in the tutorial to cover translation/furigana, audio setup, generation and realignment, review/cancellation/resume, and costs. Keep field labels visible beneath the pinned header.
+- Preserve the existing project format. API keys, usage records and native task state are excluded from project exports.
+- Validation: 123 JavaScript tests and 9 Python tests pass, with JavaScript/Python/shell syntax checks. The Firefox/Linux route was exercised on video `F-iI4-BkwXg`; the user confirmed the 46 lines’ timing, English translation and Japanese furigana. Realignment preserved annotations and reset the global offset. All 18 tutorial steps were inspected with screenshots.
+- Built and verified `dist/runrun-karaoke-1.4.0.zip` and the optional `1.4.0-local` variant, including the Linux helper archive and exact bundled privacy policy. Packages are unsigned and have not been published.
+
+This file tracks release status and planned scope. Planned features are not a record of completed work.
 
 ## 1.3.2 — Released 2026-09-15
 
@@ -147,12 +160,12 @@ The first release provides bilingual, line-based karaoke for YouTube in Firefox.
 
 Release does not imply completion of every acceptance check in [agents.md](agents.md). Remaining validation:
 
-- Complete Firefox acceptance coverage, including all display modes, shortcuts, and playback scenarios; automated browser verification has not been performed.
+- Complete Firefox acceptance coverage, including all display modes, shortcuts, and playback scenarios beyond the Firefox/Linux checks recorded for 1.4.0.
 - Validate timing for the Japanese live reference performance with English translations.
 
 ## 2.0.0 — Planned
 
-Audio-assisted timing and word or Japanese text segment highlighting.
+Word or Japanese text segment highlighting and further audio-analysis options, beyond the AudioShake line timing delivered in 1.4.0.
 
 ### Scope
 

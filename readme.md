@@ -17,9 +17,9 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.3.2 was released on September 15, 2026**, improving lyrics discovery, adding Surprise Me and restoring authenticated GitHub publication. See [changelog.md](changelog.md) for details. The release package is unsigned; full Firefox acceptance testing remains outstanding.
+Version **1.4.0 was released on November 12, 2026**, adding Genius fallback search, combined AI translation/furigana, AudioShake line timing with Linux installation guidance, and monthly cost details. Existing projects remain compatible. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
 
-Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog and LRCLIB discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
+Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog, LRCLIB and Genius discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, AudioShake recognition and line alignment, monthly API cost estimates, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
 ## GitHub lyrics repositories
 
@@ -43,10 +43,12 @@ Validation for the current release is recorded in the changelog. Existing GitHub
 
 ## Feature scope
 
-### Version 1.3.2
+### Version 1.4.0
 
 - Line-based karaoke overlay with translations directly underneath.
-- Lyrics lookup through LRCLIB, with recording selection and manual search corrections.
+- Lyrics lookup through LRCLIB with Genius fallback, recording selection and manual search corrections.
+- Combined OpenAI translation/furigana and AudioShake lyric recognition or realignment of existing lyrics.
+- Linux helper installation/status checks and monthly cost estimates with details by model.
 - Exact-video catalog lookup and random catalog discovery through **Surprise Me**.
 - Per-line lyrics and translation entry, project JSON import/export, and timed or untimed LRC import/export.
 - A timing editor for live arrangements, repeated lines, and instrumental breaks.
@@ -58,16 +60,16 @@ Validation for the current release is recorded in the changelog. Existing GitHub
 
 ### Version 2.0.0 — Planned
 
-- Audio analysis to align lyrics with the actual performance.
+- Further audio-analysis options beyond the current AudioShake line alignment.
 - Word or Japanese text segment timing and highlighting where reliable.
 - Review and correction of uncertain alignment results.
 - Continued support for manual timing and existing projects.
 
-Audio input, processing architecture, and model choice will be determined through a prototype. Automatic timing quality is not yet established.
+Word/segment analysis and highlighting still require prototyping. AudioShake line timing is available now and has been checked on the test performance documented in the changelog; review results for each video.
 
 ## Lyrics and translation sources
 
-Lyrics can be loaded from an exact video match in the public karaoke catalog or searched through LRCLIB. Opening Settings downloads `index.json` and matches its `videoId` entries locally against the current YouTube ID. Each match supplies the project file path; the extension does not scan the `translations/` folders. Renaming a video does not affect lookup. The chosen project is downloaded only when loaded, and its `videoId` is checked again. Translations can be entered manually, imported in a project JSON file, or generated with OpenAI.
+Lyrics can be loaded from an exact video match in the public karaoke catalog or searched through LRCLIB with Genius fallback. Opening Settings downloads `index.json` and matches its `videoId` entries locally against the current YouTube ID. Each match supplies the project file path; the extension does not scan the `translations/` folders. Renaming a video does not affect lookup. The chosen project is downloaded only when loaded, and its `videoId` is checked again. Translations can be entered manually, imported in a project JSON file, or generated with OpenAI.
 
 Enter translations under each original line in Line editor. Review and correct the passages manually in Line editor. Studio timing may need substantial adjustment for live performances.
 
@@ -91,7 +93,7 @@ Settings has a compact pinned header with **Tutorial**, the pink **Surprise Me**
 
 New tabs start with karaoke off. Activation is per tab; projects and display preferences are saved locally. A temporary add-on must be loaded again after restarting Firefox. The add-on uses Firefox Manifest V2, requires Firefox 142 or newer, and requires no build step.
 
-Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. AI furigana generation sends the complete original lyrics, block IDs and selected model to OpenAI using the same saved key. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Surprise Me reads the translations catalog and asks YouTube whether shuffled candidate IDs are still available before opening one. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects, saved keys and the year of the latest 1-april Surprise Me result stay in extension-local storage except for these service requests and user-triggered exports. Opening Settings automatically downloads the public catalog index; video-ID matching happens locally. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
+Firefox's installation consent declares search terms, website content, and authentication information. Lyrics searches send the query (which can contain the video title) to LRCLIB. Automatic translation sends the original lyrics, block IDs, target language, and selected model to OpenAI, using your API key for authentication. Optional furigana is returned in the same translation request. Genius fallback sends the query and its own API token to Genius; AudioShake timing uploads the video audio and optional original transcript through the separately installed Linux helper. These requests occur when you use the corresponding feature; entering lyrics and translations manually remains available without them. GitHub catalog and project downloads contact raw.githubusercontent.com without a token; catalog filtering stays local. Surprise Me reads the translations catalog and asks YouTube whether shuffled candidate IDs are still available before opening one. Confirmed publishing sends the full project to api.github.com with your saved GitHub token. Projects, saved keys and the year of the latest 1-april Surprise Me result stay in extension-local storage except for these service requests and user-triggered exports. Opening Settings automatically downloads the public catalog index; video-ID matching happens locally. Dictionary generation downloads EDICT2 and ENAMDICT from EDRDG on first use, caches them locally, and does not send lyrics to EDRDG. Export project JSON before switching extension IDs or removing a development installation; the current ID is `runrun-karaoke@silverwoodslabs`, and data from a different extension ID is not automatically migrated.
 
 ## First playback test
 
@@ -99,7 +101,7 @@ Firefox's installation consent declares search terms, website content, and authe
 2. Load an exact catalog match under **Find lyrics**, search LRCLIB, or load a lyrics file under **Import / export**.
 3. Use **Line editor → Add first line**, or **Add line before / Add line after** on an existing line, to create lines, then enter each English passage under its matching original line in **Line editor**. If timing needs adjustment, edit each line’s **Start** and **End** fields; **Alt+Shift+M** marks successive lines while the editor is open and focus is outside text fields.
 4. Play the video and check pause, backward/forward seeking, playback speed, fullscreen, and Alt+K. The microphone button should reflect the same on/off state.
-5. Generate furigana through **AI translation** with an API key, or through the dictionary button in **Display & timing** without one. Check current/next-line ruby and toggle **Show furigana**.
+5. Generate furigana through **AI features** with an API key, or through the dictionary button in **Display & timing** without one. Check current/next-line ruby and toggle **Show furigana**.
 6. Correct a reading in **Line editor**, then try **Correct a term throughout this song** for a repeated term.
 7. Export a JSON backup, reload the page, and import the backup. Check timing, translations, readings, and furigana visibility.
 
@@ -135,9 +137,9 @@ Use **Line editor → Add first line**, or **Add line before / Add line after** 
 
 Under **Import / export**, import or export project JSON for a complete backup including translations and furigana. JSON file import loads the lyrics, translations, furigana and timing for the current video without video matching. Import LRC with or without timestamps. **Export timed LRC** includes original lyrics and video timing (including the delay); every line needs a start time. **Export untimed LRC** saves original lyrics without timestamps. LRC does not preserve translations, furigana, or project metadata.
 
-## AI translation
+## AI features
 
-Open **AI translation**, enter your OpenAI API key, select a model (GPT-6 Astra by default, GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5, GPT-4.1, GPT-4o, or GPT-4o mini), and choose a translation language code. Your key, provider, model, and language preferences persist in the extension’s local storage. The key is not included in project JSON exports; use **Remove saved API key** to delete it.
+Open **AI features**, enter your OpenAI API key, select a model (GPT-6 Astra by default, GPT-5.6 Sol/Terra/Luna, GPT-5.5, GPT-5, GPT-4.1, GPT-4o, or GPT-4o mini), and choose a translation language code. Your key, provider, model, and language preferences persist in the extension’s local storage. The key is not included in project JSON exports; use **Remove saved API key** to delete it.
 
 **Translate all lines** sends all original lines together to OpenAI for context. API usage is billed to your OpenAI account. Strict JSON output pairs each translation with its original block ID. Invalid, incomplete, or stale results leave existing translations unchanged. Replacing existing translations requires confirmation. Review the translations in Line editor; timings and other language translations are preserved.
 
@@ -169,7 +171,7 @@ Use **Correct a term throughout this song**, directly above **Line editor**, to 
 
 The furigana dictionary button becomes **Re-generate furigana (dictionary)** when annotations exist. This regenerates all Japanese lines after confirmation, including manual corrections. Errors leave existing annotations intact.
 
-**AI translation → Generate furigana** uses the same saved OpenAI key and selected model to process the complete original song as context. It does not require dictionaries or use the translation target language. API usage is billed by OpenAI; no audio is sent or analyzed. Existing readings, including manual corrections, are replaced only after confirmation. During generation the button is disabled and shows a spinner. Invalid, incomplete or stale results preserve existing work. Generated readings use the same editor, visibility toggle and JSON import/export as dictionary readings. Without an API key, dictionary generation remains available under Display & timing.
+**AI features → Generate furigana** is a saved checkbox, selected by default. **Translate all lines** returns translations and optional contextual Japanese readings in one OpenAI request. Existing readings are preserved when the checkbox is clear. When selected, replacement of translations and readings is confirmed together. Invalid, incomplete or stale results preserve existing work. No audio is sent to OpenAI; dictionary generation remains available independently.
 
 ## Known limitations
 
@@ -189,9 +191,9 @@ Use English for code comments, identifiers, documentation, commit messages, and 
 
 Run `npm test` for the core, search, translation, furigana, repository, launcher, bootstrap, tutorial and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.3.2.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.4.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
 
-Run `npm run package:local` to create `dist/runrun-karaoke-1.3.2-local.zip` for temporary Firefox testing. Its display version is `1.3.2-local` and its internal Firefox version is `1.3.2.1`, keeping it distinguishable from the public 1.3.2 package without changing source version metadata.
+Run `npm run package:local` to create `dist/runrun-karaoke-1.4.0-local.zip` for temporary Firefox testing. Its display version is `1.4.0-local` and its internal Firefox version is `1.4.0.1`, keeping it distinguishable from the public 1.4.0 package without changing source version metadata.
 
 ### Guided tutorial
 
@@ -199,8 +201,30 @@ After activating the interface, the tutorial opens Settings automatically once t
 
 The eight basic steps cover Surprise Me, database search, dictionary furigana, lyric editing, reading corrections, global and individual timing, and playback. Correct readings automatically expands Edit furigana readings. Optional chapters cover AI translations, contextual furigana, recurring term corrections, live arrangements, computer backups and imports. Developer repository setup and publication are excluded. Controls remain usable during the guide; advancing a step does not run any action. On narrow screens the guide appears below Settings.
 
-**Find lyrics** checks the public karaoke catalog when Settings opens and offers matching projects for the exact YouTube video ID. It opens by default when the video has no saved lyric lines. Loading asks before replacing existing lyrics. **Search LRCLIB** remains available as an alternative, including when the catalog is unavailable.
+**Find lyrics** checks the public karaoke catalog when Settings opens and offers matching projects for the exact YouTube video ID. It opens by default when the video has no saved lyric lines. Loading asks before replacing existing lyrics. **Search** remains available as an alternative, including when the catalog is unavailable.
 
 The header places **Close** beside the title, with **Tutorial**, **Surprise Me**, **Privacy Policy** and **About** below. Surprise Me chooses a different catalog video, checks each unique shuffled candidate at most once, skips removed videos and silently hides when no candidate is available. On April 1, its first click per year opens a fixed surprise before normal selection resumes; only the year is stored. About contains the contact email link with subject ルンルンKARAOKE. Tutorial has no icon; the previous video icon is retained as a reserve asset. Tutorial highlighting disappears when the guide closes.
 
 Each line offers **Add line before**, **Add line after**, **Jump to**, reorder arrows, **Repeat** and **Delete**. Jump to seeks the video to the line’s start including its offset, preserving paused playback. Empty projects offer **Add first line**. Delete asks for confirmation only if the line contains text, translations, furigana or timing.
+
+## Genius fallback and AI timing
+
+Search uses LRCLIB first; untimed text counts as a usable result. Only when none is usable does it search Genius with your saved Genius API token. Choose a recording manually. Results and loaded projects retain the provider and source URL. Empty searches, connection errors, and Genius blocks are reported separately. Search never starts paid AI processing.
+
+AI features combines translation and optional contextual furigana in one OpenAI call. Generate furigana is selected by default and saved as a preference. Clear it to preserve existing readings. The complete response is validated before application; replacement of translations/readings is confirmed together. Dictionary generation remains independent.
+
+For AudioShake, install the [Linux helper](native/README.md) from Settings, choose Check again, save a separate AudioShake key and select a language (Auto by default). Generate timed lyrics uploads complete audio and optionally existing lyrics. Without supplied lyrics, AudioShake transcribes and aligns. Videos must be complete, finite and at most 45 minutes. Paid API usage applies only on explicit generation.
+
+Progress covers download, conversion, upload and server processing. Cancel stops local work; remote tasks may continue. Resume follows the same task ID, including after a Firefox restart. An uncertain submission is never automatically repeated. Preview and Apply/Discard are separate. With existing lyrics, text, IDs, translations and readings are preserved; ambiguous or unmatched lines remain untimed. Recognition creates new lines and asks before replacing project content. Application resets the global offset to zero and rejects stale projects or invalid timing. Review by listening and use Line editor for corrections. This version applies line timing only.
+
+Native helper packaging is generated by `npm run package`; the archive includes a downloadable `native-helper.zip`. Run `npm test`, `npm run test:native` and `npm run check`. API fixtures verify contracts and preservation, but live provider compatibility and sung timing still require an actual video test.
+
+**Generate timed lyrics** with **Use existing lyrics** selected runs alignment on existing lyrics for the current live performance or cover, even when those lyrics are already timed. It preserves text, line IDs, translations and furigana and uses the same preview, stale-result protection and Apply/Discard controls. It is a new paid alignment request, not a global offset shift.
+
+## Monthly AI costs
+
+AI features shows the current month’s recorded estimated total in USD. **Details** selects a month and groups requests by provider/model with input, cached-input and output tokens or AudioShake credits. OpenAI estimates use each response’s actual model and service tier, with public rates checked on November 12, 2026; the calculated amount and rates are saved per response. Selecting another model never reprices previous calls. Unknown models, tiers or usage remain unpriced.
+
+Set your actual AudioShake USD price per API credit in Details (amount paid divided by credits purchased). It prices new tasks and previously unpriced recorded credits; already-priced tasks keep their amount. Each task ID is counted once even when resumed. Cancellation does not imply a refund; an unfinished task stays unpriced until billing data is received.
+
+This is a local record of usage observed by the extension, not an account-wide bill. Earlier use, requests with no response, taxes and usage from other applications are not included. Usage is recorded before lyric-result validation, since a rejected result can still be billable. The ledger and price preferences are excluded from project exports. See [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and the [AudioShake dashboard](https://dashboard.audioshake.ai) for provider billing.

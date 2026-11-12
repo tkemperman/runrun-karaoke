@@ -81,3 +81,23 @@ test('AI furigana rejects altered lyrics, missing readings, invalid kana and inv
 test('AI furigana rejects missing key before calling the API', async () => {
   await assert.rejects(T.generateFurigana({ apiKey: '', model: 'gpt-5', lines: japanese }, () => assert.fail('Unexpected network request')), /API key/);
 });
+test('combined translation and furigana use one request and both are validated before returning', async () => {
+  let calls=0;
+  const combined=readings.map(row=>({...row,translation:row.id==='c'?'':'Translated'}));
+  const result=await T.translate({apiKey:'key',model:'gpt-5',language:'en',lines:japanese,includeFurigana:true},async (_url,options)=>{
+    calls++; const format=JSON.parse(options.body).text.format;
+    assert.equal(format.name,'lyrics_translation_furigana');
+    assert.deepEqual(format.schema.properties.lines.items.required,['id','segments','translation']);
+    return {ok:true,json:async()=>response(combined)};
+  });
+  assert.equal(calls,1); assert.equal(result[0].translation,'Translated'); assert.ok(result[0].furigana);
+  for (const patch of [{translation:''},{segments:[]},{id:'bad'}]) {
+    await assert.rejects(T.translate({apiKey:'key',model:'gpt-5',language:'en',lines:japanese,includeFurigana:true},async()=>({ok:true,json:async()=>response(combined.map(row=>row.id==='a'?{...row,...patch}:row))})));
+  }
+});
+test('billable usage is reported before result validation, without returning credentials or lyric content',async()=>{
+ const usage={input_tokens:123,output_tokens:456,input_tokens_details:{cached_tokens:10}};
+ let received;
+ await assert.rejects(T.translate({apiKey:'private',model:'gpt-5',language:'en',lines,includeFurigana:true,onUsage:async data=>{received=data;}},async()=>({ok:true,json:async()=>({...response(entries),id:'response-billed',model:'gpt-5',usage})})));
+ assert.equal(received.id,'response-billed');assert.deepEqual(received.usage,usage);assert.equal(received.output,undefined);assert.equal(received.apiKey,undefined);
+});

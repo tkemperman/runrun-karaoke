@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ルンルンKARAOKE",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
   "icons": {
     "16": "src/mascot-icon-transparent-16.png",
@@ -18,7 +18,10 @@
     "https://api.openai.com/*",
     "https://www.edrdg.org/*",
     "https://raw.githubusercontent.com/*",
-    "https://api.github.com/*"
+    "https://api.github.com/*",
+    "nativeMessaging",
+    "https://api.genius.com/*",
+    "https://genius.com/*"
   ],
   "background": {
     "scripts": [
@@ -28,6 +31,9 @@
       "src/providers.js",
       "src/translation.js",
       "src/repositories.js",
+      "src/timing.js",
+      "src/usage.js",
+      "src/native.js",
       "src/background.js"
     ]
   },
@@ -87,6 +93,7 @@
     "src/microphone.png",
     "src/settings.html",
     "src/settings.css",
-    "src/settings.js"
+    "src/settings.js",
+    "native-helper.zip"
   ]
 }

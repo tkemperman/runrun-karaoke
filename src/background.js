@@ -27,9 +27,24 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     let data;
     const key = `project:${message.videoId}`;
     switch (message.type) {
+      case "usage-summary":
+        data = await KaraokeUsage.summary();
+        break;
+      case "save-usage-settings":
+        data = await KaraokeUsage.saveSettings(message.settings);
+        break;
+      case "helper-status":
+      case "audioshake-settings":
+      case "save-audioshake-settings":
+      case "timing-start":
+      case "timing-status":
+      case "timing-cancel":
+      case "timing-discard":
+        data = await KaraokeNative.request(message);
+        break;
       case "load-interface":
         if (sender.frameId && sender.frameId !== 0) throw new Error("Open karaoke in the main YouTube page.");
-        for (const [file, symbol] of [["src/core.js", "KaraokeCore"], ["src/tutorial.js", "KaraokeTutorial"], ["src/content.js", "KaraokeUI"]]) {
+        for (const [file, symbol] of [["src/core.js", "KaraokeCore"], ["src/timing.js", "KaraokeTiming"], ["src/tutorial.js", "KaraokeTutorial"], ["src/content.js", "KaraokeUI"]]) {
           const [loaded] = await browser.tabs.executeScript(sender.tab.id, { code: `typeof ${symbol} !== "undefined"`, frameId: 0 });
           if (!loaded) await browser.tabs.executeScript(sender.tab.id, { file, frameId: 0 });
         }
@@ -127,31 +142,43 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       }
       case "translation-settings": {
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        data = { provider: "openai", model: saved.model || "gpt-6-astra", language: saved.language || "en", hasApiKey: !!saved.apiKey };
+        data = { provider: "openai", model: saved.model || "gpt-6-astra", language: saved.language || "en", includeFurigana: saved.includeFurigana !== false, hasApiKey: !!saved.apiKey };
         break;
       }
       case "save-translation-settings": {
         const { model, language, apiKey } = message;
+        if (message.includeFurigana !== undefined && typeof message.includeFurigana !== "boolean") throw new Error("Invalid furigana preference.");
         if (!["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"].includes(model) || typeof language !== "string" || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)) throw new Error("Invalid translation preferences.");
         if (apiKey !== undefined && (typeof apiKey !== "string" || apiKey.length > 1000)) throw new Error("Invalid API key.");
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
+        await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, includeFurigana: message.includeFurigana ?? saved.includeFurigana ?? true, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
         data = { hasApiKey: apiKey === undefined ? !!saved.apiKey : !!apiKey.trim() };
         break;
       }
       case "ai-furigana": {
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        data = await KaraokeTranslation.generateFurigana({ ...message, apiKey: saved.apiKey });
+        data = await KaraokeTranslation.generateFurigana({ ...message, apiKey: saved.apiKey, onUsage: response => KaraokeUsage.recordOpenAI(response, message.model) });
         break;
       }
       case "translate": {
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        data = await KaraokeTranslation.translate({ ...message, apiKey: saved.apiKey });
+        data = await KaraokeTranslation.translate({ ...message, apiKey: saved.apiKey, onUsage: response => KaraokeUsage.recordOpenAI(response, message.model) });
+        break;
+      }
+      case "genius-settings": {
+        const saved = (await browser.storage.local.get("geniusSettings")).geniusSettings || {};
+        data = { hasApiKey: !!saved.apiKey };
+        break;
+      }
+      case "save-genius-settings": {
+        if (typeof message.apiKey !== "string" || message.apiKey.length > 1000 || /[\r\n]/.test(message.apiKey)) throw new Error("Invalid Genius API key.");
+        await browser.storage.local.set({ geniusSettings: { apiKey: message.apiKey.trim() } });
+        data = { hasApiKey: !!message.apiKey.trim() };
         break;
       }
       case "search":
         if (typeof message.query !== "string" || !message.query.trim() || message.query.length > 500) throw new Error("Enter a shorter song or artist search.");
-        data = await KaraokeProviders.get("lrclib").search(message.query);
+        data = await KaraokeLyricsSearch(message.query, (await browser.storage.local.get("geniusSettings")).geniusSettings?.apiKey);
         break;
       default: throw new Error("Unknown request.");
     }

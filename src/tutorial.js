@@ -113,8 +113,12 @@ const KaraokeTutorial = (() => {
         if (ancestor.tagName === "DETAILS") ancestor.open = true;
       }
       if (target) {
-        // Keep the field and its following actions visible below the Settings header.
-        panel.scrollTop += target.getBoundingClientRect().top - panel.getBoundingClientRect().top - 110;
+        // Keep the field label visible below the sticky Settings header, including at browser zoom.
+        const context = target.labels?.[0] || target.closest?.("label") || target;
+        const panelTop = panel.getBoundingClientRect().top;
+        const header = Array.from(panel.children).find(child => child.tagName === "HEADER");
+        const clearance = header ? header.getBoundingClientRect().bottom - panelTop + 12 : 110;
+        panel.scrollTop += context.getBoundingClientRect().top - panelTop - clearance;
       }
       place();
     }
