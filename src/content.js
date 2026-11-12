@@ -910,7 +910,10 @@
     });
     button("Cancel", contributionNotice, () => { contributionNotice.hidden = true; });
   }
+  const publicationReview = el("div", null, repositorySection, { role: "region", "aria-label": "Confirm GitHub publication", style: "padding:12px;border:1px solid #b58aef;border-radius:8px;margin-top:12px" });
+  publicationReview.hidden = true;
   const publishButton = repositoryButton("Publish project to GitHub", async () => {
+    publicationReview.hidden = true;
     requireProject();
     if (!project.blocks.some(b => b.text.trim())) throw new Error("Load lyrics before publishing.");
     const snapshot = C.validate(project), currentGeneration = generation, videoTitle = currentVideoTitle();
@@ -926,10 +929,33 @@
       contributionNotice.hidden = true;
       const destination = await request({ type: "repository-inspect", project: snapshot, videoTitle });
       if (generation !== currentGeneration || currentVideoTitle() !== videoTitle || JSON.stringify(project) !== JSON.stringify(snapshot)) throw new Error("Project changed. Start publishing again.");
-      if (!window.confirm(`${destination.sha ? "Replace the existing file" : "Publish this project"} on GitHub?\n\n${destination.target.repo} · ${destination.target.branch}\n${destination.file}\n\nThis uploads all lyrics, translations, timing and furigana in this project.`)) return;
-      publishButton.textContent = "Publishing…";
-      await request({ type: "repository-publish", project: snapshot, videoTitle, sha: destination.sha, target: destination.target });
-      if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes; search again shortly.`);
+      publicationReview.replaceChildren();
+      el("h3", destination.sha ? "Replace the existing GitHub file?" : "Publish this project on GitHub?", publicationReview);
+      el("p", `${destination.target.repo} · ${destination.target.branch}`, publicationReview);
+      el("p", destination.file, publicationReview, { style: "overflow-wrap:anywhere" });
+      el("p", "This uploads all lyrics, translations, timing and furigana in this project.", publicationReview);
+      const actions = el("div", null, publicationReview, { class: "row" });
+      const confirm = button("Confirm publication", actions, async () => {
+        confirm.disabled = true; cancel.disabled = true; publishButton.disabled = true;
+        try {
+          if (generation !== currentGeneration || currentVideoTitle() !== videoTitle || JSON.stringify(project) !== JSON.stringify(snapshot)) throw new Error("Project changed. Start publishing again.");
+          repositoryNotify("Publishing…");
+          await request({ type: "repository-publish", project: snapshot, videoTitle, sha: destination.sha, target: destination.target });
+          publicationReview.hidden = true;
+          if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes; search again shortly.`);
+        } catch (error) {
+          publicationReview.hidden = true;
+          repositoryNotify(error.message || String(error), true);
+        } finally { confirm.disabled = false; cancel.disabled = false; publishButton.disabled = false; }
+      });
+      const cancel = button("Cancel", actions, () => {
+        publicationReview.hidden = true;
+        repositoryNotify("Publication cancelled. Nothing was uploaded.");
+      });
+      publicationReview.hidden = false;
+      repositoryNotify("Review the destination below and choose Confirm publication.");
+      publicationReview.scrollIntoView({ block: "nearest" });
+      confirm.focus({ preventScroll: true });
     } finally { publishButton.disabled = false; publishButton.textContent = "Publish project to GitHub"; }
   });
   const manual = section("Import / export");

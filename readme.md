@@ -17,7 +17,7 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.4.0 was released on November 12, 2026**, adding Genius fallback search, combined AI translation/furigana, AudioShake line timing with Linux installation guidance, and monthly cost details. Existing projects remain compatible. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
+Version **1.4.1 was released on November 12, 2026**, fixing GitHub publication confirmation with a visible review inside Settings. It includes the Genius fallback, combined translation/furigana, AudioShake timing and monthly costs introduced in 1.4.0. Existing projects remain compatible. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
 
 Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog, LRCLIB and Genius discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, AudioShake recognition and line alignment, monthly API cost estimates, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
@@ -33,7 +33,7 @@ In the lyrics editor, open **Lyrics repositories · GitHub**:
 
 - **Search repository** downloads the public catalog without credentials. With an empty filter, results match the current video ID; enter a title, artist or video ID to search the complete catalog locally.
 - **Load selected project** validates the downloaded project and confirms replacement. Other-video projects must be opened on their corresponding YouTube video. Edits made while downloading are preserved.
-- **Publish project to GitHub** shows the repository, branch and filename for confirmation. It publishes the complete project as `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`, including all translations, timing and furigana. Existing files are updated using their reviewed revision; concurrent changes fail without silently overwriting them.
+- **Publish project to GitHub** shows the repository, branch and filename for confirmation. Choose **Confirm publication** in the Settings review to upload, or **Cancel** to leave the repository unchanged. It publishes the complete project as `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`, including all translations, timing and furigana. Existing files are updated using their reviewed revision; concurrent changes fail without silently overwriting them.
 
 Repository folder titles come from the current YouTube video, independently of the lyric/translation title. Folder titles use lowercase Unicode letters and numbers (including Japanese), with whitespace and punctuation converted to single hyphens. Repeated hyphens collapse and leading/trailing hyphens are removed. Slugs are limited to 220 UTF-8 bytes; empty slugs use `untitled`. The YouTube ID keeps its original case. Matching and loading use the exact YouTube video ID, independently of the title or folder name. Existing ID-only catalog paths remain readable. Changing the YouTube video title changes its upload path.
 
@@ -43,7 +43,7 @@ Validation for the current release is recorded in the changelog. Existing GitHub
 
 ## Feature scope
 
-### Version 1.4.0
+### Version 1.4.1
 
 - Line-based karaoke overlay with translations directly underneath.
 - Lyrics lookup through LRCLIB with Genius fallback, recording selection and manual search corrections.
@@ -189,11 +189,11 @@ See [agents.md](agents.md) for the architecture, implementation sequence, and ac
 
 Use English for code comments, identifiers, documentation, commit messages, and default interface text. Lyrics, translations, artist names, and song titles retain their original languages.
 
-Run `npm test` for the core, search, translation, furigana, repository, launcher, bootstrap, tutorial and background tests and `npm run check` for JavaScript syntax checks. No npm dependencies are required. The test command uses Node.js 22 or newer.
+Run `npm test` for the JavaScript tests, including search, translation/furigana, timing, usage costs, native messaging and GitHub publication confirmation. Run `npm run test:native` for the Python helper tests and `npm run check` for JavaScript/Python syntax and shell checks. No npm dependencies are required. The JavaScript test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.4.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.4.1.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
 
-Run `npm run package:local` to create `dist/runrun-karaoke-1.4.0-local.zip` for temporary Firefox testing. Its display version is `1.4.0-local` and its internal Firefox version is `1.4.0.1`, keeping it distinguishable from the public 1.4.0 package without changing source version metadata.
+Run `npm run package:local` to create `dist/runrun-karaoke-1.4.1-local.zip` for temporary Firefox testing. Its display version is `1.4.1-local` and its internal Firefox version is `1.4.1.1`, keeping it distinguishable from the public 1.4.1 package without changing source version metadata.
 
 ### Guided tutorial
 

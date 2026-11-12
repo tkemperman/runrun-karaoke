@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 — Released 2026-11-12
+
+- Show GitHub publication confirmation inside Settings, with the exact destination, Confirm publication and Cancel controls. This avoids silently stopping when Firefox suppresses a browser confirmation dialog; project changes invalidate the reviewed upload.
+- Show cancellation and upload errors beside the publication controls. Keep the reviewed destination and file revision, and reject changed projects before upload.
+- Updated publication instructions in the main README, repository template and development guidelines. Existing projects and saved settings remain compatible.
+- Validation: Firefox review and cancellation checked against the configured catalog without uploading; 127 JavaScript tests (including publication confirmation, cancellation, stale-review rejection and error recovery), 9 Python tests and syntax checks pass. Live upload and the resulting catalog Action remain a separate confirmation step.
+- Built and verified `dist/runrun-karaoke-1.4.1.zip` and `dist/runrun-karaoke-1.4.1-local.zip`, including version metadata, ZIP integrity, native helper and the unchanged privacy policy. Packages are unsigned and have not been published.
+
 ## 1.4.0 — Released 2026-11-12
 
 - Search now falls back from LRCLIB to Genius only when no usable lyric text is available. Results retain their provider and source link; blocked requests and network errors remain distinct from empty results.

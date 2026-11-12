@@ -23,7 +23,7 @@ This template contains no lyrics.
 
    Settings save automatically when you leave a field. Keep the token private; never add it to the repository.
 
-5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish project to GitHub** to upload your project. After the repository's Action finishes, use **Search repository** to find and load it. The generated catalog can also supply random videos to **Surprise Me** when this repository is configured for retrieval.
+5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish project to GitHub**, review the repository, branch and file path shown inside Settings, then choose **Confirm publication** to upload. **Cancel** leaves the repository unchanged. If you edit the project while reviewing, start publication again. The catalog Action starts only after a successful upload commit; simply opening the review does not trigger a run. After the repository's Action finishes, use **Search repository** to find and load it. The generated catalog can also supply random videos to **Surprise Me** when this repository is configured for retrieval.
 
 The Action generates `index.json` from the project files. The extension searches that index by `videoId` and loads the recorded file path; it does not scan folder names. Renaming a YouTube video does not prevent existing projects from being found. The downloaded project’s `videoId` is also validated before loading.
 

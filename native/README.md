@@ -22,6 +22,6 @@ Task receipts under `~/.local/state/runrun-karaoke-helper` contain only request 
 
 Resume polls the recorded task; it never creates a second task. The helper records submission intent before POST. If a connection dies before the task ID is received, the outcome is uncertain: inspect your AudioShake dashboard before discarding and starting a new task. Cancellation stops local downloads/polling; an already submitted remote task may continue and incur charges. AudioShake retains uploaded data under its own policies.
 
-Protocol v1 uses Firefox length-prefixed JSON on stdin/stdout: `status`, `start`, `cancel`; responses are `status`, `progress`, `task`, `result`, `error`, `cancelled`. Start carries a UUID request ID, video ID, finite duration, language, optional transcript, optional saved task ID and an in-memory key. No network response bodies or keys are logged.
+Protocol v1 uses Firefox length-prefixed JSON on stdin/stdout: `status`, `start`, `cancel`; responses are `status`, `progress`, `task`, `billing`, `result`, `error`, `cancelled`. Billing messages carry the API-reported task credit cost for the extension’s usage ledger. Start carries a UUID request ID, video ID, finite duration, language, optional transcript, optional saved task ID and an in-memory key. No network response bodies or keys are logged.
 
 API references: [Create task](https://developer.audioshake.ai/api-reference/tasks/create), [uploads](https://developer.audioshake.ai/upload-file), [models and duration limits](https://developer.audioshake.ai/models).
