@@ -1,6 +1,6 @@
 # README mascot
 
-Release 1.4.1 (November 12, 2026) retains this artwork and its existing exports. No artwork was regenerated for this release.
+Release 1.4.2 (November 12, 2026) retains this artwork and its existing exports. No artwork was regenerated for this release.
 
 The README uses `assets/mascot.png`. The built-in image generation tool removed the baked-in checkerboard on September 10, 2026. The output was visually inspected and its PNG alpha channel verified to contain fully transparent background pixels.
 

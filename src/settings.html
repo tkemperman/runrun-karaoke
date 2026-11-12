@@ -4,10 +4,8 @@
 <body><main>
 <form id="repository-form">
 <h2>Lyrics repositories · GitHub</h2>
-<label for="retrieval-repo">Retrieval repository (owner/repository or GitHub URL)</label><input id="retrieval-repo" placeholder="owner/karaoke-lyrics">
-<label for="retrieval-branch">Retrieval branch</label><input id="retrieval-branch" value="main" required>
-<label for="publishing-repo">Upload repository (owner/repository or GitHub URL)</label><input id="publishing-repo" placeholder="owner/my-lyrics">
-<label for="publishing-branch">Upload branch</label><input id="publishing-branch" value="main" required>
+<label for="repository-repo">Repository for search and publication (owner/repository or GitHub URL)</label><input id="repository-repo" placeholder="owner/karaoke-lyrics">
+<label for="repository-branch">Branch</label><input id="repository-branch" value="main" required>
 <label for="github-token">GitHub token</label><input id="github-token" type="password" autocomplete="new-password">
 <button id="clear-github-token" type="button">Clear token</button>
 <p>Public retrieval needs no token. Uploads use a fine-grained token with Contents: read and write for your selected repository. The token stays in local extension storage and is excluded from projects. Search and publish using the buttons below.</p>

@@ -11,7 +11,7 @@ function showTokenStatus(saved) {
 }
 function showRepositorySettings(saved) {
   showTokenStatus(saved);
-  for (const side of ["retrieval", "publishing"]) {
+  for (const side of ["repository"]) {
     document.getElementById(`${side}-repo`).value = saved[side].repo;
     document.getElementById(`${side}-branch`).value = saved[side].branch;
   }
@@ -29,7 +29,7 @@ let revision = 0;
 function saveRepositorySettings(clearToken = false) {
   const currentRevision = ++revision;
   const settings = {};
-  for (const side of ["retrieval", "publishing"]) settings[side] = {
+  for (const side of ["repository"]) settings[side] = {
     repo: document.getElementById(`${side}-repo`).value,
     branch: document.getElementById(`${side}-branch`).value
   };

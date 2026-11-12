@@ -79,7 +79,7 @@ test('updates carry the reviewed SHA; conflicts and API errors never expose resp
   const sha = 'a'.repeat(40), p = project();
   const calls = mock(t,[{data:{type:'file',sha}},{data:githubUser},{status:409,text:'sensitive response saved-token'}]);
   const destination = await R.inspect(source,'saved-token',p,'Live 海の歌');
-  await assert.rejects(R.publish(source,'saved-token',p,destination.sha,'Live 海の歌'), error => /409/.test(error.message) && !/saved-token|sensitive/.test(error.message));
+  await assert.rejects(R.publish(source,'saved-token',p,destination.sha,'Live 海の歌'), error => /changed/.test(error.message) && !/saved-token|sensitive/.test(error.message));
   assert.equal(JSON.parse(calls[2].options.body).sha,sha);
   assert.equal(calls.length,3);
 });
@@ -205,4 +205,54 @@ test('identity lookup errors abort publication without falling back to account e
     assert.equal(calls[0].options.method, undefined);
     t.mock.restoreAll();
   }
+});
+
+test('repository setting migration shares one source and keeps an explicitly empty source empty',()=>{
+  const r=R.settings({retrieval:{repo:'old/search'},publishing:{repo:'mine/catalog',branch:'dev'}});
+  assert.deepEqual(r.repository,{repo:'mine/catalog',branch:'dev'});assert.deepEqual(r.retrieval,r.publishing);
+  assert.equal(R.settings({repository:{repo:''}}).repository.repo,'');
+});
+test('catalog expands legacy multilingual files and prefers a dedicated language file',async t=>{
+  const p=project();p.blocks[0].translations.nl='Zee';
+  const n=structuredClone(p);n.translationLanguage='nl';
+  mock(t,[{data:{schemaVersion:1,entries:[R.entry(p,'translations/song/en.json'),R.entry(n,'translations/song/nl.json')]}}]);
+  const entries=await R.catalog(source);assert.equal(entries.length,2);assert.equal(entries[0].translationLanguage,'en');
+  assert.equal(entries.find(e=>e.translationLanguage==='nl').file,'translations/song/nl.json');
+});
+test('multilingual publication makes one commit and refuses a changed branch',async t=>{
+  const p=project();p.blocks[0].translations.nl='Zee';
+  const sha='a'.repeat(40),tree='b'.repeat(40),commit='c'.repeat(40);
+  const review=[{data:{object:{sha}}},{data:{tree:{sha:tree}}},{data:{tree:[]}}];
+  const calls=mock(t,[...review,{data:githubUser},{data:{sha:tree}},{data:{sha:commit}},{data:{}}]);
+  await R.publishBatch(source,'token',p,sha,'Example');
+  const treeBody=JSON.parse(calls[4].options.body);assert.equal(treeBody.tree.length,2);
+  for(const item of treeBody.tree){const copy=JSON.parse(item.content);assert.deepEqual(Object.keys(copy.blocks[0].translations),[copy.translationLanguage]);assert.deepEqual(copy.display,p.display);}
+  assert.equal(calls.filter(c=>c.url.endsWith('/git/commits')&&c.options.method==='POST').length,1);
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body),{sha:commit,force:false});
+});
+test('publication conflict is detected before writing any Git objects',async t=>{
+  const calls=mock(t,[{data:{object:{sha:'b'.repeat(40)}}},{data:{tree:{sha:'c'.repeat(40)}}},{data:{tree:[]}}]);
+  await assert.rejects(R.publishBatch(source,'token',project(),'a'.repeat(40),'Example'),/changed/);
+  assert.ok(calls.every(c=>c.options.method==='GET'));
+});
+test('GitHub deletion checks the file identity and SHA before deletion',async t=>{
+  const p=project(),file='translations/song/en.json',sha='a'.repeat(40);
+  const data={type:'file',sha,content:Buffer.from(JSON.stringify(p)).toString('base64')};
+  const calls=mock(t,[{data},{data:githubUser},{data:{}}]);
+  await R.remove(source,'token',file,sha,p.videoId);
+  assert.equal(calls.at(-1).options.method,'DELETE');assert.equal(JSON.parse(calls.at(-1).options.body).sha,sha);
+});
+test('GitHub deletion refuses remote changes and missing credentials',async t=>{
+  const p=project(),file='translations/song/en.json';
+  const calls=mock(t,[{data:{type:'file',sha:'b'.repeat(40),content:Buffer.from(JSON.stringify(p)).toString('base64')}}]);
+  await assert.rejects(R.remove(source,'token',file,'a'.repeat(40),p.videoId),/changed/);
+  await assert.rejects(R.inspectBatch({repo:'',branch:'main'},'',p,'Title'),/repository is missing/);
+  await assert.rejects(R.inspectBatch(source,'',p,'Title'),/token is missing/);assert.equal(calls.length,1);
+});
+
+test('selecting an absent editor language does not publish an empty extra translation',async t=>{
+  const p=project();p.translationLanguage='nl';
+  mock(t,[{data:{object:{sha:'a'.repeat(40)}}},{data:{tree:{sha:'b'.repeat(40)}}},{data:{tree:[]}}]);
+  const review=await R.inspectBatch(source,'token',p,'Example');
+  assert.deepEqual(review.files.map(f=>f.language),['en']);
 });

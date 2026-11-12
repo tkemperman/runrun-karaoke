@@ -2,6 +2,35 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../src/core.js');
 
+test('changing a translation language preserves text, other languages and project data through export', () => {
+  const p = C.project('h3chCOV_phw');
+  p.originalLanguage = 'ja'; p.offset = 1.25;
+  p.blocks = [C.block('歌', 2, 4), C.block('次', 5, 6)];
+  p.blocks[0].furigana = [['歌', 'うた']];
+  p.blocks[0].translations = { en: 'Lied', de: 'Lied' };
+  p.blocks[1].translations = { en: '', de: 'Weiter' };
+  const before = structuredClone(p);
+  const renamed = C.renameTranslationLanguage(p, ' nl ');
+  assert.deepEqual(p, before);
+  const expected = structuredClone(p); expected.translationLanguage = 'nl';
+  expected.blocks.forEach(row => { row.translations.nl = row.translations.en; delete row.translations.en; });
+  assert.deepEqual(C.validate(C.exportProject(renamed)), expected);
+  assert.deepEqual(C.languages(renamed), ['de', 'nl']);
+  assert.deepEqual(C.renameTranslationLanguage(renamed, 'nl'), renamed);
+});
+
+test('invalid language changes and collisions cannot replace existing translations', () => {
+  const p = C.project('h3chCOV_phw'); p.blocks = [C.block('Example')];
+  p.blocks[0].translations = { en: 'Existing', nl: '' };
+  const before = structuredClone(p);
+  assert.throws(() => C.renameTranslationLanguage(p, 'nl'), /already exists/);
+  for (const language of ['', 'English', '__proto__', null]) {
+    assert.throws(() => C.renameTranslationLanguage(p, language), /language code/);
+  }
+  assert.deepEqual(p, before);
+  assert.equal(C.renameTranslationLanguage(C.project('h3chCOV_phw'), 'pt-BR').translationLanguage, 'pt-BR');
+});
+
 test('translation matching skips gaps and preserves repeated lines and project data', () => {
   const rows = [C.block('歌', 1, 2), C.block('', 2, 3), C.block('歌', 3, 4)];
   rows[0].translations.en = 'Existing';
@@ -120,7 +149,7 @@ test('legacy projects retain only the last source without changing the input', (
   const result = C.validate(p);
   assert.deepEqual(result.source, { provider: 'lrclib', url: p.sources[1].url });
   assert.equal(result.sources, undefined);
-  assert.equal(result.schemaVersion, 3);
+  assert.equal(result.schemaVersion, 4);
   assert.deepEqual(result.blocks, p.blocks);
   assert.equal(JSON.stringify(p), before);
   assert.deepEqual(C.validate(JSON.parse(JSON.stringify(result))), result);

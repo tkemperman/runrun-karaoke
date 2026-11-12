@@ -24,11 +24,11 @@ function fixture() {
     C: { validate: value => structuredClone(value) },
     currentVideoTitle: () => "Example video", requireProject() {},
     el, button, repositoryButton: (text, action) => button(text, null, action),
-    repositorySection: {}, contributionNotice: {}, offerContribution: async () => {},
+    repositorySection: {}, catalogKnown: true, findCatalogMatch: async () => {}, contributionNotice: {}, offerContribution: async () => {},
     repositoryNotify: message => statuses.push(message),
     request: async message => {
       requests.push(message);
-      if (message.type === "repository-settings") return { hasToken: true };
+      if (message.type === "repository-settings") return { hasToken: true, repository: { repo: 'example/catalog', branch: 'main' } };
       if (message.type === "repository-inspect") return {
         sha: "reviewed-revision", file: "translations/example/en.json",
         target: { repo: "example/catalog", branch: "main" }

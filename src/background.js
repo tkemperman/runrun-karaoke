@@ -1,5 +1,15 @@
 "use strict";
 let furiganaMatcherPromise;
+const projectStore = KaraokeProjects.create(browser.storage.local, KaraokeCore);
+const surpriseNavigation = new Map();
+async function repositoryPreferences() {
+  const saved = (await browser.storage.local.get('repositorySettings')).repositorySettings || {};
+  const preferences = KaraokeRepositories.settings(saved);
+  if (!saved.repository) {
+    await browser.storage.local.set({ repositorySettingsBackup: { retrieval: saved.retrieval, publishing: saved.publishing }, repositorySettings: { repository: preferences.repository, token: saved.token || '' } });
+  }
+  return { saved, preferences };
+}
 async function youtubeVideoAvailable(videoId) {
   try {
     const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
@@ -53,17 +63,20 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       case "catalog-search":
       case "catalog-load": {
         if (!/^[\w-]{11}$/.test(message.videoId)) throw new Error("Invalid video ID.");
-        const source = { repo: "tkemperman/runrun-karaoke-lyrics-catalog", branch: "main" };
+        const { preferences } = await repositoryPreferences();
+        const source = preferences.repository;
+        if (message.source && JSON.stringify(message.source) !== JSON.stringify(source)) throw new Error('Repository settings changed. Search again.');
         if (message.type === "catalog-search") {
-          data = (await KaraokeRepositories.catalog(source)).filter(entry => entry.videoId === message.videoId);
+          data = (await KaraokeRepositories.catalog(source)).filter(entry => entry.videoId === message.videoId).map(entry => ({ ...entry, source }));
         } else {
           data = await KaraokeRepositories.retrieve(source, message.file, message.videoId);
+          if (message.language) data.translationLanguage = message.language;
         }
         break;
       }
       case "repository-settings": {
-        const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
-        data = { ...KaraokeRepositories.settings(saved), hasToken: !!saved.token };
+        const { saved, preferences } = await repositoryPreferences();
+        data = { ...preferences, hasToken: !!saved.token };
         break;
       }
       case "save-repository-settings": {
@@ -72,7 +85,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         if (message.token !== undefined && (typeof message.token !== "string" || message.token.length > 1000 || /[\r\n]/.test(message.token))) throw new Error("Invalid GitHub token.");
         const preferences = KaraokeRepositories.settings(message.settings);
         const token = message.token === undefined ? saved.token || "" : message.token.trim();
-        await browser.storage.local.set({ repositorySettings: { ...preferences, token } });
+        await browser.storage.local.set({ repositorySettings: { repository: preferences.repository, token } });
         data = { ...preferences, hasToken: !!token };
         break;
       }
@@ -81,9 +94,10 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       case "repository-random":
       case "repository-load":
       case "repository-inspect":
+      case "repository-delete-inspect":
+      case "repository-delete":
       case "repository-publish": {
-        const saved = (await browser.storage.local.get("repositorySettings")).repositorySettings || {};
-        const preferences = KaraokeRepositories.settings(saved);
+        const { saved, preferences } = await repositoryPreferences();
         if (message.type === "repository-search") {
           if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
           data = await KaraokeRepositories.catalog(preferences.retrieval);
@@ -96,7 +110,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           const prankWasShown = aprilFoolsYear !== null && (await browser.storage.local.get(prankKey))[prankKey] === aprilFoolsYear;
           if (aprilFoolsYear !== null && !prankWasShown) {
             if (message.type === "repository-random") await browser.storage.local.set({ [prankKey]: aprilFoolsYear });
-            data = message.type === "repository-random" ? { videoId: "668r-uYMFfA" } : { available: true };
+            data = message.type === "repository-random" ? { videoId: "668r-uYMFfA", prank: true } : { available: true };
             break;
           }
           if (!preferences.retrieval.repo) { data = message.type === "repository-random" ? { videoId: null } : { available: false }; break; }
@@ -112,16 +126,61 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
             if (await youtubeVideoAvailable(candidate)) { selectedVideoId = candidate; break; }
           }
           data = { videoId: selectedVideoId };
+          if (selectedVideoId) surpriseNavigation.set(sender.tab.id, { videoId: selectedVideoId, expires: Date.now() + 60000 });
         }
         if (message.type === "repository-load") {
           if (JSON.stringify(message.source) !== JSON.stringify(preferences.retrieval)) throw new Error("Retrieval settings changed. Search again.");
           data = await KaraokeRepositories.retrieve(preferences.retrieval, message.file, message.videoId);
         }
-        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspect(preferences.publishing, saved.token, message.project, message.videoTitle), target: preferences.publishing };
+        if (message.type === "repository-inspect") data = { ...await KaraokeRepositories.inspectBatch(preferences.publishing, saved.token, message.project, message.videoTitle), target: preferences.publishing };
         if (message.type === "repository-publish") {
           if (JSON.stringify(message.target) !== JSON.stringify(preferences.publishing)) throw new Error("Upload settings changed. Check the destination again.");
-          data = await KaraokeRepositories.publish(preferences.publishing, saved.token, message.project, message.sha, message.videoTitle);
+          data = await KaraokeRepositories.publishBatch(preferences.publishing, saved.token, message.project, message.sha, message.videoTitle);
         }
+        if (message.type === 'repository-delete-inspect' || message.type === 'repository-delete') {
+          if (JSON.stringify(message.target) !== JSON.stringify(preferences.repository)) throw new Error('Repository settings changed. Review deletion again.');
+          data = message.type === 'repository-delete-inspect'
+            ? await KaraokeRepositories.inspectDelete(preferences.repository, saved.token, message.file, message.videoId)
+            : await KaraokeRepositories.remove(preferences.repository, saved.token, message.file, message.sha, message.videoId);
+        }
+        break;
+      }
+      case 'surprise-arrival': {
+        const intent = surpriseNavigation.get(sender.tab.id);
+        surpriseNavigation.delete(sender.tab.id);
+        data = !!intent && intent.videoId === message.videoId && intent.expires > Date.now();
+        break;
+      }
+      case 'surprise-pending': {
+        const intent = surpriseNavigation.get(sender.tab.id);
+        data = !!intent && intent.videoId === message.videoId && intent.expires > Date.now();
+        break;
+      }
+      case 'project-read': data = await projectStore.read(message.videoId); break;
+      case 'project-write':
+        data = await projectStore.write(message.project.videoId, message.project, message.revision, { manualLoad: message.manualLoad === true }); break;
+      case 'project-delete':
+        data = await projectStore.write(message.videoId, null, message.revision, { deleted: true }); break;
+      case 'project-auto': {
+        const previous = await projectStore.read(message.videoId);
+        if (previous.dirty || previous.blocked || previous.revision !== message.revision) { data = previous; break; }
+        const { preferences } = await repositoryPreferences();
+        const source = preferences.repository;
+        const entry = (await KaraokeRepositories.catalog(source)).find(e => e.videoId === message.videoId && e.translationLanguage === 'en');
+        if (!entry) { data = previous; break; }
+        const imported = await KaraokeRepositories.retrieve(source, entry.file, message.videoId);
+        imported.translationLanguage = 'en';
+        if (JSON.stringify((await repositoryPreferences()).preferences.repository) !== JSON.stringify(source)) throw new Error('Repository settings changed. Try again.');
+        // Preserve previously loaded other languages if their shared lyrics still match.
+        let candidate = imported;
+        if (previous.project) {
+          const incomingLanguages = new Set(imported.blocks.flatMap(row => Object.keys(row.translations)));
+          const retained = { ...previous.project, translationLanguage: 'en', blocks: previous.project.blocks.map(row => ({ ...row,
+            translations: Object.fromEntries(Object.entries(row.translations).filter(([language]) => !incomingLanguages.has(language))) })) };
+          const merged = KaraokeCore.mergeTranslations(imported, retained);
+          if (!merged.replacement) candidate = merged.project;
+        }
+        data = await projectStore.write(message.videoId, candidate, previous.revision, { automatic: true, source: { ...source, file: entry.file } });
         break;
       }
       case "furigana": {
@@ -136,22 +195,25 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         break;
       case "save": {
         const project = KaraokeCore.validate(message.project);
-        await browser.storage.local.set({ [`project:${project.videoId}`]: project });
+        const state = await projectStore.read(project.videoId);
+        if (state.revision !== 0) throw new Error('Reload YouTube before saving with the updated extension.');
+        await projectStore.write(project.videoId, project, 0);
         data = true;
         break;
       }
       case "translation-settings": {
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        data = { provider: "openai", model: saved.model || "gpt-6-astra", language: saved.language || "en", includeFurigana: saved.includeFurigana !== false, hasApiKey: !!saved.apiKey };
+        data = { provider: "openai", model: saved.model || "gpt-6-astra", language: saved.language || "en", includeFurigana: saved.includeFurigana !== false, convertRomaji: saved.convertRomaji !== false, hasApiKey: !!saved.apiKey };
         break;
       }
       case "save-translation-settings": {
         const { model, language, apiKey } = message;
+        if (message.convertRomaji !== undefined && typeof message.convertRomaji !== 'boolean') throw new Error('Invalid romaji preference.');
         if (message.includeFurigana !== undefined && typeof message.includeFurigana !== "boolean") throw new Error("Invalid furigana preference.");
         if (!["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"].includes(model) || typeof language !== "string" || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)) throw new Error("Invalid translation preferences.");
         if (apiKey !== undefined && (typeof apiKey !== "string" || apiKey.length > 1000)) throw new Error("Invalid API key.");
         const saved = (await browser.storage.local.get("translationSettings")).translationSettings || {};
-        await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, includeFurigana: message.includeFurigana ?? saved.includeFurigana ?? true, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
+        await browser.storage.local.set({ translationSettings: { provider: "openai", model, language, includeFurigana: message.includeFurigana ?? saved.includeFurigana ?? true, convertRomaji: message.convertRomaji ?? saved.convertRomaji ?? true, apiKey: apiKey === undefined ? saved.apiKey || "" : apiKey.trim() } });
         data = { hasApiKey: apiKey === undefined ? !!saved.apiKey : !!apiKey.trim() };
         break;
       }

@@ -11,11 +11,12 @@ function harness(translation = {}, dictionary = {}, repositories = require("../s
     commands: { onCommand: { addListener(fn) { command = fn; } } },
     tabs: { query: async () => [{id: 7}], sendMessage: async (...args) => sent.push(args) },
     storage: { local: {
-      get: async key => ({ [key]: saved[key] }),
+      get: async key => Array.isArray(key) ? Object.fromEntries(key.map(k => [k, saved[k]])) : ({ [key]: saved[key] }),
+      remove: async key => { delete saved[key]; },
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary, ...globals});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProjects: require("../src/projects.js"), KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary, ...globals});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {
@@ -116,7 +117,7 @@ test('repository credentials can only be configured by settings and are never re
   assert.equal(savedResponse.hasToken, true);
   assert.equal(savedResponse.token, undefined);
   const loaded = (await h.request({ type: 'repository-settings' })).data;
-  assert.equal(loaded.retrieval.repo, 'community/lyrics');
+  assert.equal(loaded.retrieval.repo, 'me/lyrics');
   assert.equal(loaded.token, undefined);
   assert.equal((await h.request({ type: 'repository-settings' }, settingsSender)).data.token, undefined);
   assert.equal(loaded.hasToken, true);
@@ -124,13 +125,13 @@ test('repository credentials can only be configured by settings and are never re
   assert.equal(h.saved.repositorySettings.token, 'secret');
   await h.request({ type: 'save-repository-settings', settings, token: '' }, settingsSender);
   assert.equal(h.saved.repositorySettings.token, '');
-  assert.equal(h.saved.repositorySettings.retrieval.repo, 'community/lyrics');
+  assert.equal(h.saved.repositorySettings.repository.repo, 'me/lyrics');
   assert.equal(await h.request({ type: 'repository-settings' }, {}), undefined);
   assert.equal(await h.request({ type: 'repository-publish' }, settingsSender), undefined);
 });
 test('repository publication uses only saved credentials and rejects changed destinations', async () => {
   const R = require('../src/repositories.js'); let received;
-  const h = harness({}, {}, { ...R, publish: async (...args) => { received = args; return { file: 'test' }; } });
+  const h = harness({}, {}, { ...R, publishBatch: async (...args) => { received = args; return { file: 'test' }; } });
   const settings = R.settings({ publishing: { repo: 'me/lyrics' } });
   await h.request({ type: 'save-repository-settings', settings, token: 'saved-secret' }, settingsSender);
   const message = { type: 'repository-publish', target: settings.publishing, token: 'untrusted', project: C.project('abcdefghijk'), videoTitle: 'Actual video title', sha: null };
@@ -141,9 +142,9 @@ test('repository publication uses only saved credentials and rejects changed des
   assert.match((await h.request({ type: 'repository-load', source: { repo: 'stale/repo' } })).error, /changed/);
 });
 
-test('public catalog lookup uses the fixed repository and returns only exact video matches', async () => {
+test('public catalog lookup uses the configured repository and returns only exact video matches', async () => {
   const calls = [];
-  const h = harness({}, {}, {
+  const h = harness({}, {}, { ...require('../src/repositories.js'),
     catalog: async source => {
       calls.push(source);
       return [
@@ -157,8 +158,8 @@ test('public catalog lookup uses the fixed repository and returns only exact vid
   const result = await h.request({ type: 'catalog-search', videoId: 'h3chCOV_phw' });
   assert.equal(result.data.length, 1);
   assert.equal(result.data[0].videoId, 'h3chCOV_phw');
-  assert.equal(calls[0].repo, 'tkemperman/runrun-karaoke-lyrics-catalog');
-  assert.equal(calls[0].branch, 'main');
+  assert.equal(calls[0].repo, 'other/repo');
+  assert.equal(calls[0].branch, 'custom');
   const loaded = await h.request({ type: 'catalog-load', videoId: 'h3chCOV_phw', file: result.data[0].file });
   assert.equal(loaded.data.videoId, 'h3chCOV_phw');
   assert.equal(calls[1].source.repo, calls[0].repo);
@@ -187,6 +188,7 @@ test('Surprise Me has no result for an unconfigured repository or a catalog cont
     catalogCalls++;
     return [{ videoId: 'h3chCOV_phw' }, { videoId: 'h3chCOV_phw' }];
   } });
+  h.saved.repositorySettings = { repository: { repo: '', branch: 'main' } };
   assert.equal((await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' })).data.videoId, null);
   assert.equal(catalogCalls, 0);
   await h.request({ type: 'save-repository-settings', settings: { retrieval: { repo: 'community/lyrics' } } }, settingsSender);
@@ -234,4 +236,40 @@ test('Surprise Me stops after checking every unique candidate when all catalog v
   const result = await h.request({ type: 'repository-random', videoId: 'h3chCOV_phw' });
   assert.equal(result.data.videoId, null);
   assert.equal(checks, 2);
+});
+
+test('automatic loading uses English, stores provenance, and refuses local edits and deletion markers', async () => {
+  const remote=C.project('abcdefghijk'); remote.originalLanguage='sr'; remote.blocks=[C.block('Original',0,2)];remote.blocks[0].translations.en='English';
+  let retrieves=0;
+  const h=harness({}, {}, {...require('../src/repositories.js'), catalog:async()=>[{videoId:remote.videoId,translationLanguage:'nl',file:'translations/test/nl.json'},{videoId:remote.videoId,translationLanguage:'en',file:'translations/test/en.json'}],retrieve:async(_s,file)=>{assert.match(file,/en.json$/);retrieves++;return structuredClone(remote);}});
+  const loaded=await h.request({type:'project-auto',videoId:remote.videoId,revision:0});
+  assert.equal(loaded.data.project.originalLanguage,'sr'); assert.equal(loaded.data.dirty,false);
+  const edited=structuredClone(remote);edited.blocks[0].text='Own lyrics';
+  await h.request({type:'project-write',project:edited,revision:loaded.data.revision});
+  const preserved=await h.request({type:'project-auto',videoId:remote.videoId,revision:2});
+  assert.equal(preserved.data.project.blocks[0].text,'Own lyrics'); assert.equal(retrieves,1);
+  await h.request({type:'project-delete',videoId:remote.videoId,revision:2});
+  const deleted=await h.request({type:'project-auto',videoId:remote.videoId,revision:3});
+  assert.equal(deleted.data.project,null);assert.equal(deleted.data.blocked,true);assert.equal(retrieves,1);
+});
+test('no English catalog translation leaves the project untouched', async () => {
+  const h=harness({}, {}, {...require('../src/repositories.js'),catalog:async()=>[{videoId:'abcdefghijk',translationLanguage:'nl'}],retrieve:async()=>assert.fail('No fallback download')});
+  const result=await h.request({type:'project-auto',videoId:'abcdefghijk',revision:0});
+  assert.equal(result.data.project,null);assert.equal(h.saved['project:abcdefghijk'],undefined);
+});
+test('Surprise Me only records a navigation intent and never writes the local project', async () => {
+  const h=harness({}, {}, {...require('../src/repositories.js'),catalog:async()=>[{videoId:'abcdefghijk',translationLanguage:'en'}]});
+  const p=C.project('abcdefghijk');p.blocks=[C.block('My changes')];
+  await h.request({type:'project-write',project:p,revision:0});
+  const before=JSON.stringify(h.saved['project:abcdefghijk']);
+  await h.request({type:'repository-random',videoId:'12345678901'});
+  assert.equal(JSON.stringify(h.saved['project:abcdefghijk']),before);
+  assert.equal((await h.request({type:'surprise-arrival',videoId:'abcdefghijk'})).data,true);
+  assert.equal((await h.request({type:'surprise-arrival',videoId:'abcdefghijk'})).data,false);
+});
+test('old content scripts cannot recreate a deleted project with the legacy save message', async () => {
+  const h=harness(),p=C.project('abcdefghijk');
+  await h.request({type:'project-delete',videoId:p.videoId,revision:0});
+  assert.match((await h.request({type:'save',project:p})).error,/Reload/);
+  assert.equal(h.saved['project:abcdefghijk'],undefined);
 });

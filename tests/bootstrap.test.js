@@ -7,7 +7,7 @@ function harness(load) {
   const node = () => ({ style: {}, dataset: {}, setAttribute() {}, addEventListener() {}, append() {}, prepend() {}, remove() {}, attachShadow: node });
   const context = {
     document: { createElement: node, createElementNS: node, body: node(), querySelector: () => null, addEventListener() {} },
-    location: { pathname: '/watch' }, MutationObserver: class { observe() {} }, requestAnimationFrame() {},
+    URL, location: { pathname: '/watch', href: 'https://www.youtube.com/watch' }, MutationObserver: class { observe() {} }, requestAnimationFrame() {},
     browser: { runtime: { getURL: x => x, onMessage: { addListener(fn) { listener = fn; } }, sendMessage: async message => { requests++; assert.equal(message.type, 'load-interface'); return load(context); } } }
   };
   vm.runInNewContext(fs.readFileSync('src/bootstrap.js', 'utf8'), context);

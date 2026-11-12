@@ -8,7 +8,7 @@ Last updated: November 12, 2026
 
 The extension also keeps a local monthly API-usage ledger with provider/model, request/task identifier, timestamp, token counts or credits, and estimated costs. It contains no API keys, lyrics or audio and is excluded from project exports.
 
-The extension stores karaoke projects, video IDs and titles, lyrics, translations, timing information, search queries, preferences, and downloaded dictionaries locally in your Firefox profile. If you provide OpenAI, Genius or AudioShake API keys, they are stored locally in this extension’s private storage, which other extensions cannot access.
+The extension stores karaoke projects, their catalog origin and local-change state, per-video automatic-loading preferences, video IDs and titles, lyrics, translations, timing information, search queries, preferences, and downloaded dictionaries locally in your Firefox profile. If you provide OpenAI, Genius or AudioShake API keys, they are stored locally in this extension’s private storage, which other extensions cannot access.
 
 ## External services
 
@@ -22,7 +22,7 @@ The extension contacts the following services for their respective features:
 
 - **OpenAI:** When you request translation with optional furigana, the extension sends the project's lyrics, line identifiers, selected model, and target language where applicable to api.openai.com. Your OpenAI API key is sent to OpenAI for authentication. No video or audio is sent to OpenAI. Requests use `store: false`; this does not override OpenAI's own data retention policies.
 
-- **GitHub:** Opening Settings checks the public karaoke catalog for the current video by downloading its index from raw.githubusercontent.com and matching the YouTube ID locally. Loading a match downloads its project file. These public catalog requests do not require a GitHub account or token.
+- **GitHub:** Opening a YouTube video checks the configured public karaoke catalog by downloading its index from raw.githubusercontent.com and matching the video ID locally. When a local project has no user changes, an available English translation is downloaded and saved automatically. You can manually choose other translations. Deleting a local project disables automatic loading for that video until you manually load a project. These automatic public reads also occur while Karaoke is off and Settings is closed, and do not require a GitHub account or token.
 
 - **YouTube:** Surprise Me sends candidate video URLs from the translations catalog to YouTube's oEmbed endpoint to skip removed videos before opening a random available video. Each unique candidate is checked at most once per click. No lyrics or translations are included in these checks.
 

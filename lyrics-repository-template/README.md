@@ -15,15 +15,13 @@ This template contains no lyrics.
 
    | Field | Value |
    | --- | --- |
-   | Retrieval repository | `YOUR-USERNAME/YOUR-REPOSITORY` |
-   | Retrieval branch | `main` |
-   | Upload repository | `YOUR-USERNAME/YOUR-REPOSITORY` |
-   | Upload branch | `main` |
+   | Repository for search and publication | `YOUR-USERNAME/YOUR-REPOSITORY` |
+   | Branch | `main` |
    | GitHub token | The token you just copied |
 
    Settings save automatically when you leave a field. Keep the token private; never add it to the repository.
 
-5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish project to GitHub**, review the repository, branch and file path shown inside Settings, then choose **Confirm publication** to upload. **Cancel** leaves the repository unchanged. If you edit the project while reviewing, start publication again. The catalog Action starts only after a successful upload commit; simply opening the review does not trigger a run. After the repository's Action finishes, use **Search repository** to find and load it. The generated catalog can also supply random videos to **Surprise Me** when this repository is configured for retrieval.
+5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish project to GitHub**, review the repository, branch and file paths shown inside Settings, then choose **Confirm publication** to publish all local languages together in one commit. Each language file contains its translation and shared original lyrics, timing, furigana and display settings. **Cancel** leaves the repository unchanged. If you edit the project while reviewing, start publication again. The catalog Action starts only after a successful upload commit; simply opening the review does not trigger a run. After the repository's Action finishes, use **Search repository** to find and load it. The generated catalog can also supply random videos to **Surprise Me** from this same repository.
 
 The Action generates `index.json` from the project files. The extension searches that index by `videoId` and loads the recorded file path; it does not scan folder names. Renaming a YouTube video does not prevent existing projects from being found. The downloaded project’s `videoId` is also validated before loading.
 
@@ -32,3 +30,5 @@ The Action generates `index.json` from the project files. The extension searches
 Code and technical documentation are licensed under [MIT](LICENSE).
 **Lyrics and translations are excluded**; rights remain with their respective
 rights holders. See [CONTENT_NOTICE.md](CONTENT_NOTICE.md).
+
+Projects use schema 4; the included validators also read schemas 1–3. Update the scripts in an existing catalog from this template before publishing schema 4 projects. The index lists available translation languages. Public English auto-loading never replaces local user changes. Deleting a GitHub file requires a separate inline confirmation and leaves the local project intact.

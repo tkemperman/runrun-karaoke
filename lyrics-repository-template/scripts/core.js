@@ -7,10 +7,68 @@
   }
   function project(videoId, title = "") {
     title = title.trim();
-    return { schemaVersion: 3, furiganaEnabled: false, videoId, videoUrl: `https://www.youtube.com/watch?v=${videoId}`, videoTitle: title, title, artist: "", originalLanguage: "ja", translationLanguage: "en", offset: 0, source: null, blocks: [] };
+    return { schemaVersion: 4, display: displayDefaults(), furiganaEnabled: false, videoId, videoUrl: `https://www.youtube.com/watch?v=${videoId}`, videoTitle: title, title, artist: "", originalLanguage: "und", translationLanguage: "en", offset: 0, source: null, blocks: [] };
+  }
+  function displayDefaults() {
+    return { fontSize: 30, position: 13, translationFontSize: 23, translationPosition: 8, showOriginal: true, showTranslation: true, showNext: false };
+  }
+  function languages(value) {
+    return [...new Set([value.translationLanguage, ...value.blocks.flatMap(row => Object.keys(row.translations))])].sort();
+  }
+  function renameTranslationLanguage(value, language) {
+    if (typeof language !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language.trim())) throw new Error('Enter a language code such as en, nl or pt-BR.');
+    language = language.trim();
+    const p = validate(value), previous = p.translationLanguage;
+    if (language === previous) return p;
+    if (p.blocks.some(row => Object.hasOwn(row.translations, language))) throw new Error(`A ${language} translation already exists. Select it from Saved translations instead.`);
+    for (const row of p.blocks) {
+      if (Object.hasOwn(row.translations, previous)) {
+        row.translations[language] = row.translations[previous];
+        delete row.translations[previous];
+      }
+    }
+    p.translationLanguage = language;
+    return p;
+  }
+  function exportProject(value) {
+    const p = validate(value);
+    return { schemaVersion: p.schemaVersion, videoId: p.videoId, videoUrl: p.videoUrl, videoTitle: p.videoTitle,
+      title: p.title, artist: p.artist, originalLanguage: p.originalLanguage, translationLanguage: p.translationLanguage,
+      offset: p.offset, furiganaEnabled: p.furiganaEnabled, display: p.display, source: p.source,
+      blocks: p.blocks.map(b => ({ id: b.id, text: b.text, start: b.start, end: b.end, translations: b.translations,
+        ...(b.furigana ? { furigana: b.furigana } : {}) })) };
+  }
+  function fingerprint(value) {
+    const p = exportProject(value);
+    delete p.translationLanguage;
+    return JSON.stringify(p);
+  }
+  function mergeTranslations(current, incoming) {
+    const a = validate(current), b = validate(incoming);
+    if (!a.blocks.length) return { project: b, conflicts: [], replacement: false };
+    if (a.videoId !== b.videoId || a.blocks.length !== b.blocks.length ||
+        (a.originalLanguage !== 'und' && b.originalLanguage !== 'und' && a.originalLanguage !== b.originalLanguage)) {
+      return { project: b, conflicts: [], replacement: true };
+    }
+    const byId = new Map(b.blocks.map(row => [row.id, row]));
+    let matched = a.blocks.map(row => byId.get(row.id));
+    if (matched.some((row, i) => !row || row.text !== a.blocks[i].text)) {
+      if (a.blocks.some((row, i) => row.text !== b.blocks[i].text)) return { project: b, conflicts: [], replacement: true };
+      matched = b.blocks;
+    }
+    const conflicts = new Set();
+    a.blocks.forEach((row, i) => {
+      for (const [language, text] of Object.entries(matched[i].translations)) {
+        if (row.translations[language]?.trim() && row.translations[language] !== text) conflicts.add(language);
+        row.translations[language] = text;
+      }
+    });
+    a.translationLanguage = b.translationLanguage;
+    if (a.originalLanguage === 'und') a.originalLanguage = b.originalLanguage;
+    return { project: a, conflicts: [...conflicts], replacement: false };
   }
   function validate(value) {
-    if (!value || ![1, 2, 3].includes(value.schemaVersion)) throw new Error("Unsupported project schema.");
+    if (!value || ![1, 2, 3, 4].includes(value.schemaVersion)) throw new Error("Unsupported project schema.");
     value = { ...value };
     if (value.schemaVersion === 1) {
       value.schemaVersion = 2;
@@ -57,6 +115,12 @@
       if (!source || Array.isArray(source) || typeof source.provider !== "string" || typeof source.url !== "string" || !/^https:\/\//.test(source.url)) throw new Error("Invalid source link.");
       value.source = { provider: source.provider, url: source.url };
     }
+    const display = { ...displayDefaults(), ...(value.display || {}) };
+    for (const key of ['fontSize', 'translationFontSize']) if (!Number.isFinite(display[key]) || display[key] < 12 || display[key] > 80) throw new Error('Invalid text size.');
+    for (const key of ['position', 'translationPosition']) if (!Number.isFinite(display[key]) || display[key] < 0 || display[key] > 90) throw new Error('Invalid text position.');
+    for (const key of ['showOriginal', 'showTranslation', 'showNext']) if (typeof display[key] !== 'boolean') throw new Error('Invalid text visibility.');
+    value.display = Object.fromEntries(Object.keys(displayDefaults()).map(key => [key, display[key]]));
+    value.schemaVersion = 4;
     return JSON.parse(JSON.stringify(value));
   }
   function validateFurigana(text, parts) {
@@ -200,7 +264,7 @@
     try { validate(value); }
     catch (error) { row.start = previousStart; value.offset = previousOffset; throw error; }
   }
-  const api = { replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, importLyrics, exportLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
+  const api = { displayDefaults, languages, renameTranslationLanguage, exportProject, fingerprint, mergeTranslations, replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, importLyrics, exportLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
   root.KaraokeCore = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.2 — Released 2026-11-12
+
+- Allow editing the current translation language code while preserving its text; reject language collisions and show a separate selector only for multiple saved translations. AI translations retain their chosen target language.
+- Store multiple translation languages per video with separate original-language metadata, shared lyrics/timing and schema 4 display settings. Line editor and AI share a language selection, initially English and then the last manually chosen language. JSON preserves every language and merges compatible imports with overwrite confirmation; schemas 1–3 remain importable.
+- Automatically load and save English from the configured catalog only for empty or verifiably unchanged projects. Preserve legacy projects, local changes and edits made during downloads. Find lyrics always offers catalog languages and LRCLIB/Genius search. Surprise Me never replaces local work, keeps Karaoke and Settings open, and manual navigation closes them.
+- Use one repository and branch for catalog reads, Surprise Me, search and publication. Publish all local languages in one reviewed commit, preserving other remote languages and rejecting branch conflicts. Add separately confirmed remote deletion and clear repository/token errors. Local deletion removes the complete project and suppresses automatic loading until a manual load.
+- Save separate original/translation visibility, size and placement in projects, JSON and GitHub. Confirm timing shifts affecting other lines, add Reset Start at, and reset the offset when replacing lyrics from search or LRC.
+- Require a nonempty reading for kanji segments in the structured AI response, with explicit instructions and actionable line numbers when validation fails. Reproduced missing readings on `vSwxof0K8lk` using GPT-5.6 Terra; the corrected request returned all 41 translations and furigana and passed the editor/save flow without changing original text or timing. No automatic paid retries were added.
+- Detect the original language in AI translation and offer saved, default-on Japanese romaji conversion without rewriting non-Japanese lyrics. Correct original-language metadata in existing local and GitHub projects, including Serbian lyrics previously marked as Japanese; preserve translation languages, text and timing.
+- Expand and shorten the tutorial to 21 steps covering catalog choices, languages, audio recognition versus alignment, imports/exports and local deletion. Update the README, repository template, privacy policy and development guidance. Audio-based furigana correction remains a TODO; no such feature is included in this release.
+- Validation: 152 JavaScript tests, 9 Python tests and JavaScript/Python/shell syntax checks pass. Earlier browser checks covered automatic catalog loading, multilingual imports and local deletion; the catalog metadata update's GitHub Action passed. Live extension-driven publication and remote deletion remain unverified.
+- Built and verified `dist/runrun-karaoke-1.4.2.zip` and `dist/runrun-karaoke-1.4.2-local.zip`, including version metadata, ZIP integrity, exact runtime/privacy files and the native helper. Packages are unsigned and have not been published.
+
 ## 1.4.1 — Released 2026-11-12
 
 - Show GitHub publication confirmation inside Settings, with the exact destination, Confirm publication and Cancel controls. This avoids silently stopping when Firefox suppresses a browser confirmation dialog; project changes invalidate the reviewed upload.
