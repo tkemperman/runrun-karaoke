@@ -1,5 +1,7 @@
 # Lyrics and translations: rights notice
 
+Reviewed for the repository template distributed with ルンルンKARAOKE 1.4.5; this release does not change the scope of this notice.
+
 The MIT License applies only to the software and technical documentation in this
 repository. It does not apply to song lyrics or translations, including those
 stored under `translations/` or reproduced elsewhere in this repository.

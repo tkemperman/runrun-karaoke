@@ -1,6 +1,6 @@
 # Add-on icon
 
-Release 1.4.4 (November 13, 2026) retains this artwork and its existing exports. No artwork was regenerated for this release.
+Release 1.4.5 (November 19, 2026) retains this artwork and its existing exports. No artwork was regenerated for this security release.
 
 Generated with the built-in image generation tool using `assets/mascot.png` as the identity reference, followed by a background-extraction edit. Master image: `assets/addon-icon.png`. Runtime exports: `src/mascot-icon-transparent-{16,32,48,64,96,128}.png`, resized with ImageMagick. The background is transparent (PNG alpha).
 

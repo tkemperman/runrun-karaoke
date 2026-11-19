@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -19,11 +20,25 @@ class HelperTests(unittest.TestCase):
     def test_protocol_and_validation(self):
         value=self.request(); data=json.dumps(value).encode()
         self.assertEqual(H.read_message(io.BytesIO(struct.pack('@I',len(data))+data)),value)
-        for data in [b'aa',struct.pack('@I',1000001),struct.pack('@I',4)+b'{}']:
+        for data in [b'aa',struct.pack('@I',1000001),struct.pack('@I',4)+b'null']:
             with self.assertRaises(ValueError): H.read_message(io.BytesIO(data))
-        for key,value in [('duration',float('nan')),('duration',2701),('duration',True),('videoId','bad'),('language','Japanese'),('transcript',''),('apiKey','a\nb')]:
+        for key,value in [('duration',float('nan')),('duration',2701),('duration',True),('videoId','bad'),('requestId','-'*36),('language','Japanese'),('transcript',''),('apiKey','a\nb')]:
             request=self.request();request[key]=value
             with self.assertRaises(ValueError):H.validate_request(request)
+
+    def test_receipts_require_private_storage_and_reject_symlinks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state=Path(folder)/'state';state.mkdir(mode=0o755)
+            worker=H.Worker(self.request(),lambda _:None,state)
+            with self.assertRaises(OSError):worker.record({'taskId':'safe'})
+            state.chmod(0o700);target=Path(folder)/'target';target.write_text('{"taskId":"stolen"}')
+            worker.receipt.symlink_to(target)
+            with self.assertRaises(OSError):worker.read_receipt()
+            self.assertEqual(target.read_text(),'{"taskId":"stolen"}')
+
+    def test_limited_json_rejects_oversized_responses(self):
+        self.assertEqual(H.limited_json(io.BytesIO(b'{"ok":true}'),100,'Test'),{'ok':True})
+        with self.assertRaises(RuntimeError):H.limited_json(io.BytesIO(b'12345'),4,'Test')
 
     def test_status_detects_missing_dependencies_without_keys(self):
         with patch.object(H.shutil,'which',return_value=None):
@@ -199,6 +214,26 @@ class HelperTests(unittest.TestCase):
             self.assertNotIn('sudo pacman',result.stdout)
             result=subprocess.run(['sh','native/install.sh','--distro','unknown','--check'],capture_output=True,text=True,env=env)
             self.assertNotIn('sudo ',result.stdout)
+
+    def test_user_installer_uses_private_atomic_files(self):
+        import os
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)/'home';home.mkdir()
+            env={**os.environ,'HOME':str(home)}
+            command=[sys.executable,'native/install.py']
+            subprocess.run(command,check=True,capture_output=True,text=True,env=env)
+            target=home/'.local/share/runrun-karaoke-helper'
+            helper=target/'helper.py';launcher=target/'run-helper'
+            manifest=home/'.mozilla/native-messaging-hosts/com.runrun.karaoke.json'
+            self.assertEqual(target.stat().st_mode & 0o777,0o700)
+            self.assertEqual(helper.stat().st_mode & 0o777,0o600)
+            self.assertEqual(launcher.stat().st_mode & 0o777,0o700)
+            self.assertEqual(manifest.stat().st_mode & 0o777,0o600)
+            sentinel=home/'sentinel';sentinel.write_text('unchanged')
+            helper.unlink();helper.symlink_to(sentinel)
+            subprocess.run(command,check=True,capture_output=True,text=True,env=env)
+            self.assertFalse(helper.is_symlink())
+            self.assertEqual(sentinel.read_text(),'unchanged')
 
     def test_other_distribution_package_checks(self):
         import os

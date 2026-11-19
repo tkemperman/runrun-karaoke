@@ -3,6 +3,8 @@
 Set up your own public lyrics and translation repository for ルンルンKARAOKE.
 This template contains no lyrics.
 
+This template was reviewed with extension release 1.4.5. The security hardening in that release does not change project schema 4 or catalog schema 1, so existing repositories need no migration.
+
 ## Setup
 
 1. **Create your repository.** Create an empty **public** repository on GitHub. Copy everything from this template directory, including the hidden `.github` directory, into its root and commit it to `main`. If working in a local clone, push it to GitHub before continuing. Alternatively, [fork the existing catalog](https://github.com/tkemperman/runrun-karaoke-lyrics-catalog/fork).

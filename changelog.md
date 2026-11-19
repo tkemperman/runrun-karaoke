@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.5 — Released 2026-11-19
+
+- Harden the Linux native helper after a security review. Native messages must be JSON objects with strictly shaped request IDs, task receipts must be private regular files in a private user-owned directory, and malformed or oversized service responses are rejected before processing.
+- Make helper installation and receipt persistence atomic. Existing helper destinations are replaced instead of followed, preventing symlink targets from being overwritten; installed directories and executables use `0700`, while helper source, manifests and receipts use `0600`.
+- Review extension permissions, credential routing, external fetches, untrusted lyrics rendering, GitHub paths, native subprocess arguments, packaged contents and accidental-secret patterns. The application has no npm dependencies, so there is no third-party npm dependency tree to audit.
+- Validation: 172 JavaScript tests, 20 Python tests, syntax checks and the Ruff security rules pass. Mozilla's add-on linter reports zero errors, warnings and notices for the packaged release. No live paid API request or authenticated GitHub write was performed.
+- Built and verified `dist/runrun-karaoke-1.4.5.zip` and `dist/runrun-karaoke-1.4.5-local.zip`, including version metadata, ZIP integrity, exact runtime/privacy files and the hardened Linux helper. The packages are unsigned and have not been uploaded or published.
+
 ## 1.4.4 — Released 2026-11-13
 
 - Place red Remove key buttons beside saved key fields and confirm credential removal. Keep Clear audio file neutral and immediate.

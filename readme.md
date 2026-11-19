@@ -17,7 +17,7 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.4.4 was released on November 13, 2026**. This release simplifies local editing to one translation per song, retains separate catalog files per language, and updates the tutorial. Protected automatic English catalog loading and local and GitHub deletion remain available. Schema 4 preserves display settings alongside lyrics, translations, timing and furigana; schemas 1–3 remain importable. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
+Version **1.4.5 was released on November 19, 2026**. This security release hardens the Linux helper's native-message validation, private task receipts, installer writes and external-response limits without changing the project schema or user workflow. It retains the 1.4.4 editing, catalog and tutorial behavior. Schema 4 preserves display settings alongside lyrics, translations, timing and furigana; schemas 1–3 remain importable. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
 
 Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog, LRCLIB and Genius discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, AudioShake recognition and line alignment, monthly API cost estimates, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
@@ -38,12 +38,14 @@ Repository folder titles come from the current YouTube video, independently of t
 
 The Action regenerates `index.json` after uploads. Reload the video after it finishes to refresh catalog availability; raw GitHub caching can delay visibility. The same configured repository serves public reads and explicit developer writes. Catalog checks can automatically load English only when there are no local changes. Authenticated inspection and publication use the saved token exclusively in the background. Publication uses the Git data API for one commit across language files; remote deletion uses the Contents API.
 
-Version 1.4.4 validation: 172 JavaScript tests, 17 Python tests and syntax checks pass. The tutorial was walked through in Firefox with screenshots, including keyboard navigation and the updated catalog layout. A deeper tutorial review remains on the TODO list. GitHub publication is covered by mocked tests; authenticated publication and remote deletion still need live end-to-end verification.
+Version 1.4.5 validation: 172 JavaScript tests, 20 Python tests, syntax checks and Ruff security rules pass. Mozilla's add-on linter reports no errors, warnings or notices for the packaged release. The earlier tutorial walkthrough remains applicable because this release does not change the interface. A deeper tutorial review remains on the TODO list. GitHub publication is covered by mocked tests; authenticated publication and remote deletion still need live end-to-end verification.
 
 ## Feature scope
 
-### Version 1.4.4
+### Version 1.4.5
 
+- Private, atomically replaced native-helper files and task receipts with symlink and ownership checks.
+- Strict native JSON/request-ID validation and bounded AudioShake response processing.
 - Line-based karaoke overlay with translations directly underneath.
 - Lyrics lookup through LRCLIB with Genius fallback, recording selection and manual search corrections.
 - Combined OpenAI translation/furigana and AudioShake lyric recognition or realignment of existing lyrics.
@@ -194,9 +196,9 @@ Use English for code comments, identifiers, documentation, commit messages, and 
 
 Run `npm test` for the JavaScript tests, including search, translation/furigana, timing, usage costs, native messaging and GitHub publication confirmation. Run `npm run test:native` for the Python helper tests and `npm run check` for JavaScript/Python syntax and shell checks. No npm dependencies are required. The JavaScript test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.4.4.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.4.5.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
 
-Run `npm run package:local` to create `dist/runrun-karaoke-1.4.4-local.zip` for temporary Firefox testing. Its display version is `1.4.4-local` and its internal Firefox version is `1.4.4.1`, keeping it distinguishable from the public 1.4.4 package without changing source version metadata.
+Run `npm run package:local` to create `dist/runrun-karaoke-1.4.5-local.zip` for temporary Firefox testing. Its display version is `1.4.5-local` and its internal Firefox version is `1.4.5.1`, keeping it distinguishable from the public 1.4.5 package without changing source version metadata.
 
 ### Guided tutorial
 

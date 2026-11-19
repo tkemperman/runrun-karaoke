@@ -24,6 +24,7 @@ PROTOCOL = 1
 API = "https://api.audioshake.ai"
 MAX_DURATION = 2700
 WRITE_LOCK = threading.Lock()
+REQUEST_ID = re.compile(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")
 
 class Cancelled(Exception):
     pass
@@ -48,11 +49,13 @@ def distro(path="/etc/os-release"):
 
 def status():
     dependencies = {"Python": {"available": sys.version_info >= (3, 10), "version": sys.version.split()[0]}}
-    for label, executable, argument in [("yt-dlp", "yt-dlp", "--version"), ("FFmpeg", "ffmpeg", "-version"), ("FFprobe", "ffprobe", "-version"), ("JavaScript runtime (Deno)", "deno", "--version")]:
+    for label, command, argument in [("yt-dlp", "yt-dlp", "--version"), ("FFmpeg", "ffmpeg", "-version"), ("FFprobe", "ffprobe", "-version"), ("JavaScript runtime (Deno)", "deno", "--version")]:
         version = ""
-        if shutil.which(executable):
+        executable = shutil.which(command)
+        if executable:
             try:
-                check = subprocess.run([executable, argument], capture_output=True, text=True, timeout=5)
+                # The command name comes from the fixed list above and is resolved before execution.
+                check = subprocess.run([executable, argument], capture_output=True, text=True, timeout=5)  # noqa: S603
                 if check.returncode == 0:
                     version = check.stdout.splitlines()[0][:150]
             except (OSError, subprocess.TimeoutExpired):
@@ -82,13 +85,35 @@ def read_message(stream):
     data = stream.read(length)
     if len(data) != length:
         raise ValueError("Truncated message.")
-    return json.loads(data)
+    message = json.loads(data)
+    if not isinstance(message, dict):
+        raise ValueError("Native request must be an object.")
+    return message
+
+
+def private_directory(path):
+    """Create or verify a directory which cannot be modified by another user."""
+    path = Path(path)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise OSError("Helper data directory must be private and owned by the current user.")
+    return path
+
+
+def limited_json(response, limit, service):
+    raw = response.read(limit + 1)
+    if len(raw) > limit:
+        raise RuntimeError(f"{service} response is too large.")
+    return json.loads(raw)
 
 
 def validate_request(message):
+    if not isinstance(message, dict):
+        raise ValueError("Invalid native request.")
     if not re.fullmatch(r"[\w-]{11}", message.get("videoId", "")):
         raise ValueError("Invalid video ID.")
-    if not re.fullmatch(r"[a-f0-9-]{36}", message.get("requestId", "")):
+    if not REQUEST_ID.fullmatch(message.get("requestId", "")):
         raise ValueError("Invalid request ID.")
     seconds = message.get("duration")
     if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or not 0 < seconds <= MAX_DURATION:
@@ -108,7 +133,9 @@ def audio_cache_path(video_id, cache_dir=None, create=True):
         raise ValueError("Invalid video ID.")
     folder = Path(cache_dir or Path(tempfile.gettempdir()) / f"runrun-karaoke-audio-{os.getuid()}")
     if create:
-        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        private_directory(folder)
+    elif not folder.exists():
+        raise FileNotFoundError(folder)
     info = folder.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
         raise OSError("Audio cache must be a private directory owned by the current user.")
@@ -142,21 +169,34 @@ class Worker:
         self.emit({"type": "progress", "stage": stage, **extra})
 
     def record(self, value):
-        self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = self.receipt.with_suffix(".tmp")
-        with temporary.open("w") as file:
-            json.dump(value, file)
-            file.flush()
-            os.fsync(file.fileno())
-        temporary.chmod(0o600)
-        temporary.replace(self.receipt)
+        private_directory(self.state_dir)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile("w", dir=self.state_dir, prefix=".receipt-", delete=False) as file:
+                temporary = Path(file.name)
+                os.fchmod(file.fileno(), 0o600)
+                json.dump(value, file)
+                file.flush()
+                os.fsync(file.fileno())
+            temporary.replace(self.receipt)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    def read_receipt(self):
+        private_directory(self.state_dir)
+        info = self.receipt.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise OSError("Task receipt must be a private regular file.")
+        return json.loads(self.receipt.read_text())
 
     def api(self, path, payload=None):
         data = None if payload is None else json.dumps(payload).encode()
-        request = urllib.request.Request(API + path, data=data, headers={"x-api-key": self.message["apiKey"], "Content-Type": "application/json"})
+        # API is a fixed HTTPS origin; path is internal or contains a validated task ID.
+        request = urllib.request.Request(API + path, data=data, headers={"x-api-key": self.message["apiKey"], "Content-Type": "application/json"})  # noqa: S310
         try:
             with urllib.request.build_opener(NoRedirect).open(request, timeout=60) as response:
-                return json.loads(response.read(3000000))
+                return limited_json(response, 3000000, "AudioShake")
         except urllib.error.HTTPError as error:
             raise RuntimeError(f"AudioShake returned HTTP {error.code}. Check your key, account access or quota.") from None
         except (OSError, ValueError):
@@ -187,7 +227,7 @@ class Worker:
             response = connection.getresponse()
             if not 200 <= response.status < 300:
                 raise RuntimeError(f"AudioShake upload failed (HTTP {response.status}).")
-            asset = json.loads(response.read(1000000))
+            asset = limited_json(response, 1000000, "AudioShake upload")
             if not isinstance(asset.get("id"), str):
                 raise RuntimeError("AudioShake did not return an asset ID.")
             return asset["id"]
@@ -199,7 +239,8 @@ class Worker:
         # Files avoid pipe deadlocks and are removed with all other temporary data.
         last_percent = None
         with (folder / "stdout").open("w+") as stdout, (folder / "stderr").open("w+") as stderr:
-            self.process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True, start_new_session=True)
+            # All argument vectors are assembled internally from fixed tools, validated IDs and private paths.
+            self.process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True, start_new_session=True)  # noqa: S603
             started = time.monotonic()
             try:
                 while self.process.poll() is None:
@@ -364,7 +405,7 @@ class Worker:
         try:
             validate_request(self.message)
             if self.receipt.exists():
-                receipt = json.loads(self.receipt.read_text())
+                receipt = self.read_receipt()
                 if receipt.get("videoId") != self.message["videoId"]:
                     raise ValueError("Task belongs to a different video.")
                 self.task_id = receipt.get("taskId")
