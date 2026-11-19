@@ -8,6 +8,7 @@ async function repositoryRequest(message) {
 function showTokenStatus(saved) {
   document.getElementById("github-token").placeholder = saved.hasToken
     ? "Token saved — enter a new token to replace it" : "Enter your GitHub token";
+  document.getElementById("clear-github-token").hidden = !saved.hasToken;
 }
 function showRepositorySettings(saved) {
   showTokenStatus(saved);
@@ -51,6 +52,7 @@ form.addEventListener("submit", event => {
   saveRepositorySettings();
 });
 document.getElementById("clear-github-token").addEventListener("click", () => {
+  if (!window.confirm("Remove the saved GitHub token?")) return;
   document.getElementById("github-token").value = "";
   saveRepositorySettings(true);
 });

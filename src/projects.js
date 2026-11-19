@@ -13,7 +13,7 @@
       const key = `project:${videoId}`, metaKey = `projectState:${videoId}`;
       const saved = await storage.get([key, metaKey, 'displaySettings']);
       const legacy = saved[key];
-      const project = legacy ? core.exportProject(legacy) : null;
+      const project = legacy ? core.exportProject(core.singleTranslation(legacy)) : null;
       if (project && !legacy.display && saved.displaySettings) {
         for (const field of ['fontSize', 'position', 'showNext']) {
           if (saved.displaySettings[field] !== undefined) project.display[field] = saved.displaySettings[field];
@@ -30,7 +30,7 @@
         // but never over another user's edit or a deletion tombstone.
         if (previous.revision !== expectedRevision && (expectedRevision > previous.revision || options.automatic || options.deleted || previous.dirty || previous.blocked)) throw new Error('Project changed in another tab. Reload before saving. Your current edits remain in the editor.');
         if (options.automatic && (previous.dirty || previous.blocked)) return previous;
-        const project = value ? core.exportProject(value) : null;
+        const project = value ? core.exportProject(core.singleTranslation(value)) : null;
         if (project && project.videoId !== videoId) throw new Error('Project belongs to another video.');
         const state = { revision: previous.revision + 1, dirty: project ? !options.automatic : false,
           blocked: options.deleted ? true : options.manualLoad ? false : previous.blocked,

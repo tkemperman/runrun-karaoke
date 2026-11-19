@@ -109,6 +109,20 @@ const KaraokeNative = (() => {
     if (message.type === "timing-start") return launch(message);
     return serialized(message.videoId, async () => {
       const entry = active.get(message.videoId);
+      if (message.type === "timing-clear-audio") {
+        if (entry) throw new Error("Wait for the timing task to stop before removing audio.");
+        let timer;
+        try {
+          const response = await Promise.race([
+            browser.runtime.sendNativeMessage(host, { type: "clear-audio-cache", videoId: message.videoId }),
+            new Promise((_, reject) => (timer = setTimeout(() => reject(new Error("Audio cleanup timed out. Try again.")), 10000)))
+          ]);
+          if (response?.type !== "audio-cache-cleared" || typeof response.removed !== "boolean") {
+            throw new Error(response?.error || "Update the Linux helper to remove cached audio.");
+          }
+          return { removed: response.removed };
+        } finally { clearTimeout(timer); }
+      }
       if (message.type === "timing-cancel") {
         if (entry) entry.port.postMessage({ type: "cancel" });
         else {

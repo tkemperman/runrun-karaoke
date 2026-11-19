@@ -18,7 +18,7 @@
       const end = line?.end ?? words?.at(-1)?.end;
       if (typeof text !== "string" || !text.trim() || text.length > 20000 || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > seconds + 0.05 || start < previousStart || end < previousEnd) throw new Error("AudioShake returned invalid or out-of-order timing, or timing beyond this video.");
       previousStart = start; previousEnd = end;
-      return { text, start, end: Math.min(end, seconds) };
+      return { text: text.trim(), start, end: Math.min(end, seconds) };
     });
   }
   function align(blocks, timed) {

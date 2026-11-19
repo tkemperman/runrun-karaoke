@@ -1,5 +1,6 @@
  :root { color-scheme: dark; font: 14px/1.45 system-ui, sans-serif; background: #182235; color: #eef2ff; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; } main { padding: 0 2px 8px; }
 h2 { display: none; } p { margin: 8px 0; color: #b4c0d4; font-size: 12px; }
 label { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
@@ -7,5 +8,10 @@ input, button { font: inherit; border: 1px solid #526078; color: #fff; }
 input { display: block; width: 100%; border-radius: 5px; padding: 7px; background: #121c2b; min-width: 0; }
 button { cursor: pointer; border-radius: 7px; padding: 7px 11px; background: #28354b; margin: 8px 0; }
 button:hover { background: #3c4d69; } button:disabled { opacity: .65; cursor: wait; }
+.key-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.key-row input { flex: 1; width: 0; }
+.key-row button { flex: 0 0 auto; margin: 0; }
+button.danger { background: #b91c1c; border-color: #f87171; }
+button.danger:hover { background: #991b1b; }
 :focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
 a { color: #82e5f0; } #status { color: #8de9dd; white-space: pre-wrap; }

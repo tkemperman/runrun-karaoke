@@ -13,6 +13,11 @@
     button { cursor: pointer; border: 1px solid #526078; border-radius: 7px; padding: 7px 11px; background: #28354b; color: #fff; }
     details > button + button { margin-inline-start: 8px; }
     button:hover { background: #3c4d69; } button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    .key-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .key-row input { flex: 1; width: 0; }
+    .key-row button { flex: 0 0 auto; }
+    button.danger { background: #b91c1c; border-color: #f87171; }
+    button.danger:hover { background: #991b1b; }
     a.primary-button { display: inline-flex; align-items: center; border: 1px solid #60a5fa; border-radius: 7px; padding: 7px 11px; background: #2563eb; color: #fff; text-decoration: none; }
     a.primary-button:hover { background: #1d4ed8; }
     a.primary-button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
@@ -36,6 +41,18 @@
     #privacy-toolbar button, #about-toolbar button { flex-shrink:0; }
     #privacy-text, #about-text { min-height:0; overflow:auto; overscroll-behavior:contain; padding-top:8px; }
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
+    .editor-toolbar { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; padding: 10px 12px; border: 1px solid #41516d; border-radius: 8px; }
+    .editor-toolbar p { flex: 1; min-width: 0; margin: 0; }
+    .editor-toolbar button { flex-shrink: 0; margin-inline-start: auto; }
+    .lyrics-source-choice { margin: 12px 0; padding: 8px 12px; border: 1px solid #41516d; border-radius: 8px; }
+    .lyrics-source-choice input[type=radio] { width: 16px; height: 16px; margin: 0; accent-color: #67e8f9; }
+    .lyrics-source-choice .source-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+    .lyrics-source-choice .source-or::before, .lyrics-source-choice .source-or::after { content: ""; flex: 1; border-top: 1px solid #41516d; }
+    .catalog-panel, .lyrics-source-choice > .lyrics-search-panel { margin-left: 24px; }
+    .catalog-panel button:disabled { cursor: default; }
+    .lyrics-search-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+    .lyrics-search-row input, .lyrics-search-row select { flex: 1; width: 0; min-width: 0; }
+    .lyrics-search-row button { flex-shrink: 0; }
     details { border-top: 1px solid #39465c; padding: 12px 0; } summary { cursor: pointer; font-weight: 650; }
     #status { white-space: pre-wrap; color: #8de9dd; } #status.error { color: #ffb4b4; }
     #repository-status { white-space: pre-wrap; color: #8de9dd; } #repository-status.error { color: #ffb4b4; }
@@ -66,6 +83,22 @@
     if (type !== "textarea") node.type = type;
     node.value = value;
     return node;
+  }
+  function keyInput(label, parent, provider, remove) {
+    const id = `${provider.toLowerCase()}-api-key`;
+    el("label", label, parent, { for: id });
+    const row = el("div", null, parent, { class: "key-row" });
+    const field = el("input", null, row, { id, type: "password", autocomplete: "off" });
+    const removeButton = button("Remove key", row, async () => {
+      if (!window.confirm(`Remove the saved ${provider} API key?`)) return;
+      removeButton.disabled = true;
+      try { await remove(); field.value = ""; }
+      finally { removeButton.disabled = false; }
+    });
+    removeButton.className = "danger";
+    removeButton.setAttribute("aria-label", `Remove ${provider} key`);
+    removeButton.hidden = true;
+    return { field, removeButton };
   }
   function section(title) { const node = el("details", null, panel); el("summary", title, node); return node; }
   const panel = el("section", null, root, { id: "panel", "aria-label": "ルンルンKARAOKE editor" }); panel.hidden = true;
@@ -433,49 +466,104 @@
     finally { applyCorrection.disabled = false; applyCorrection.removeAttribute("aria-busy"); }
   });
   const searchSection = section("Find lyrics");
-  el('h3', 'Translations catalog', searchSection);
-  const matchingCatalog = el("div", null, searchSection);
+  const sourceChoices = el('fieldset', null, searchSection, { class: 'lyrics-source-choice', 'aria-label': 'Lyrics source' });
+  sourceChoices.hidden = true;
+  const catalogChoiceLabel = el('label', null, sourceChoices, { class: 'checkbox-row' });
+  const catalogChoice = el('input', null, catalogChoiceLabel, { type: 'radio', name: 'lyrics-source', value: 'catalog' });
+  el('span', 'Use lyrics translation from catalog', catalogChoiceLabel);
+  const catalogPanel = el('div', null, sourceChoices, { class: 'catalog-panel' }); catalogPanel.hidden = true;
+  const matchingCatalog = el("div", null, catalogPanel);
+  el('div', 'or', sourceChoices, { class: 'muted source-or' });
+  const searchChoiceLabel = el('label', null, sourceChoices, { class: 'checkbox-row' });
+  const searchChoice = el('input', null, searchChoiceLabel, { type: 'radio', name: 'lyrics-source', value: 'search' });
+  el('span', 'Search for lyrics', searchChoiceLabel);
+  const catalogCheckStatus = el('p', 'Checking catalog availability…', searchSection, { class: 'muted', role: 'status' });
+  const lyricsSearchPanel = el('div', null, searchSection, { class: 'lyrics-search-panel' });
   let checkedCatalogGeneration = -1, availableCatalog = [], catalogKnown = false;
-  const refreshCatalog = button('Refresh translations catalog', searchSection, () => findCatalogMatch());
+  let lyricsSource = 'catalog';
+  let catalogLoad = null, catalogLanguageChoice = null, catalogLoading = false;
+  function updateLyricsSource() {
+    const hasCatalog = availableCatalog.length > 0;
+    sourceChoices.hidden = !hasCatalog;
+    catalogPanel.hidden = !hasCatalog;
+    const searchParent = hasCatalog ? sourceChoices : searchSection;
+    if (lyricsSearchPanel.parentElement !== searchParent) searchParent.append(lyricsSearchPanel);
+    lyricsSearchPanel.hidden = hasCatalog && lyricsSource === 'catalog';
+    catalogChoice.checked = hasCatalog && lyricsSource === 'catalog';
+    searchChoice.checked = !catalogChoice.checked;
+    if (catalogLoad) catalogLoad.disabled = !catalogChoice.checked || catalogLoading;
+    if (catalogLanguageChoice) catalogLanguageChoice.disabled = !catalogChoice.checked || catalogLoading;
+  }
+  catalogChoice.addEventListener('change', () => { lyricsSource = 'catalog'; updateLyricsSource(); });
+  searchChoice.addEventListener('change', () => { lyricsSource = 'search'; updateLyricsSource(); });
   async function findCatalogMatch() {
     const token = generation, requestedId = videoId;
     checkedCatalogGeneration = token;
-    refreshCatalog.disabled = true;
     matchingCatalog.replaceChildren();
-    const status = el('p', 'Checking translations for this video…', matchingCatalog, { role: 'status' });
+    catalogLoad = null; catalogLanguageChoice = null; catalogLoading = false;
+    catalogCheckStatus.hidden = false;
+    catalogCheckStatus.textContent = 'Checking catalog availability…';
     try {
       const entries = await request({ type: 'catalog-search', videoId: requestedId });
       if (generation !== token) return;
       availableCatalog = entries; catalogKnown = true;
       updatePublicationState();
-      status.textContent = entries.length ? 'Choose a translation. English is the default.' : 'No catalog translations for this video. You can search for lyrics below.';
-      for (const entry of entries) {
-        const load = button(`Load catalog lyrics · ${entry.translationLanguage}`, matchingCatalog, async () => {
-          requireProject();
-          const snapshot = JSON.stringify(project);
-          load.disabled = true;
-          try {
-            const imported = C.validate(await request({ type: 'catalog-load', videoId: requestedId, file: entry.file, source: entry.source, language: entry.translationLanguage }));
-            if (generation !== token) return;
-            if (JSON.stringify(project) !== snapshot) throw new Error('Project changed while downloading. Load again to review replacement.');
-            if (await acceptProject(imported)) notify('Catalog translation loaded. Other compatible translation languages kept.');
-          } finally { load.disabled = false; }
-        });
+      updateLyricsSource();
+      catalogCheckStatus.hidden = true;
+      renderCatalogChoices(entries, token, requestedId);
+    } catch (error) {
+      if (generation === token) {
+        availableCatalog = []; catalogKnown = false;
+        catalogCheckStatus.textContent = error.message; updateLyricsSource(); updatePublicationState();
       }
-    } catch (error) { if (generation === token) status.textContent = error.message; }
-    finally { refreshCatalog.disabled = false; }
+    }
   }
+  function renderCatalogChoices(entries, token, requestedId) {
+    matchingCatalog.replaceChildren();
+    catalogLoad = null; catalogLanguageChoice = null;
+    if (entries.length) {
+      const languageName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code); } catch (_) { return code; } };
+      let languageChoice = null;
+      if (entries.length > 1) {
+        languageChoice = el('select', null, el('label', 'Translation', matchingCatalog));
+        entries.forEach((entry, i) => el('option', languageName(entry.translationLanguage), languageChoice, { value: String(i) }));
+        languageChoice.value = String(Math.max(0, entries.findIndex(entry => entry.translationLanguage === 'en')));
+      }
+      const load = button(entries.length === 1 ? `Use ${languageName(entries[0].translationLanguage)} translation` : 'Use selected translation', matchingCatalog, async () => {
+        if (load.disabled || lyricsSource !== 'catalog') return;
+        requireProject();
+        const entry = entries[languageChoice ? Number(languageChoice.value) : 0];
+        if (!entry || generation !== token) return;
+        const snapshot = JSON.stringify(project);
+        catalogLoading = true; updateLyricsSource();
+        try {
+          const imported = C.validate(await request({ type: 'catalog-load', videoId: requestedId, file: entry.file, source: entry.source, language: entry.translationLanguage }));
+          if (generation !== token || lyricsSource !== 'catalog') return;
+          if (JSON.stringify(project) !== snapshot) throw new Error('Project changed while downloading. Load again to review replacement.');
+          if (await acceptProject(imported)) notify('Catalog translation loaded. Other compatible translation languages kept.');
+        } finally { if (generation === token) { catalogLoading = false; updateLyricsSource(); } }
+      });
+      catalogLoad = load; catalogLanguageChoice = languageChoice; updateLyricsSource();
+    }
+  }
+
   function updatePublicationState() {
-    if (catalogKnown && !repositorySection.hidden) repositorySection.open = !availableCatalog.some(e => e.translationLanguage === project?.translationLanguage);
+    const published = catalogKnown && !!project && availableCatalog.some(e => e.videoId === videoId && e.translationLanguage === project.translationLanguage);
+    deleteRemote.hidden = !published;
+    if (catalogKnown && !repositorySection.hidden) repositorySection.open = !published;
   }
-  el('h3', 'Search lyrics', searchSection);
-  el('p', 'Search LRCLIB, with Genius as fallback when no usable lyrics are found. You can always choose this instead of the catalog.', searchSection, { class: 'muted' });
-  const query = input("Song or artist", searchSection);
+  el('p', 'Search by song or artist. Choose a recording from the results.', lyricsSearchPanel, { class: 'muted' });
+  el('label', 'Song or artist', lyricsSearchPanel, { for: 'lyrics-query' });
+  const queryRow = el('div', null, lyricsSearchPanel, { class: 'lyrics-search-row' });
+  const query = el('input', null, queryRow, { id: 'lyrics-query', type: 'text' });
   let queryDirty = false;
   let queryReady = false;
+  let searchRequest = 0;
   query.addEventListener("input", () => {
     if (!videoId) return;
+    lyricsSource = 'search'; updateLyricsSource();
     queryDirty = true;
+    resetSearchResults();
     browser.storage.local.set({ [`lyricsSearch:${videoId}`]: { query: query.value } }).catch(fail);
   });
   function currentVideoTitle() {
@@ -491,29 +579,44 @@
       if (queryReady && !queryDirty) query.value = currentTitle;
     }
   }
-  const searchButton = button("Search", searchSection, async () => {
+  const searchButton = button("Search", queryRow, async () => {
     requireProject();
     if (searchButton.disabled) return;
     searchButton.disabled = true;
+    resetSearchResults();
+    const currentGeneration = generation, requestId = searchRequest;
     try {
-    const currentGeneration = generation; notify("Searching LRCLIB, then Genius if needed…");
+    notify("Searching LRCLIB, then Genius if needed…");
     const found = await request({ type: "search", query: query.value });
-    if (currentGeneration !== generation) return;
+    if (currentGeneration !== generation || requestId !== searchRequest) return;
     results = found.results; resultList.replaceChildren();
     results.forEach((row, index) => el("option", `${row.provider.toUpperCase()} · ${row.artist} — ${row.title} (${Math.round(row.duration || 0)}s; ${row.syncedLyrics ? "timed" : "untimed"})`, resultList, { value: String(index) }));
+    resultRow.hidden = !results.length;
+    noResults.hidden = !!results.length;
     updateSelectionWarning();
     notify([...(found.warnings || []), results.length ? "Choose a recording. Live timing may need correction." : "No results. Try another title or import a lyrics file."].join(" "));
+    } catch (error) {
+      if (currentGeneration === generation && requestId === searchRequest) throw error;
     } finally { searchButton.disabled = false; }
   });
-  const resultList = el("select", null, searchSection, { "aria-label": "Lyrics recordings", style: "width:100%;margin:8px 0" });
-  const selectionWarning = el("p", untimedMessage, searchSection, { class: "muted warning", role: "status" });
+  const resultRow = el('div', null, lyricsSearchPanel, { class: 'lyrics-search-row' });
+  resultRow.hidden = true;
+  const resultList = el("select", null, resultRow, { "aria-label": "Lyrics recordings" });
+  const noResults = el('p', 'No results found.', lyricsSearchPanel, { class: 'muted', role: 'status' });
+  noResults.hidden = true;
+  const selectionWarning = el("p", untimedMessage, lyricsSearchPanel, { class: "muted warning", role: "status" });
   selectionWarning.hidden = true;
+  function resetSearchResults() {
+    searchRequest++;
+    results = []; resultList.replaceChildren();
+    resultRow.hidden = true; noResults.hidden = true; selectionWarning.hidden = true;
+  }
   function updateSelectionWarning() {
     const source = results[Number(resultList.value)];
     selectionWarning.hidden = !source || !!source.syncedLyrics;
   }
   resultList.addEventListener("change", updateSelectionWarning);
-  button("Use selected lyrics", searchSection, () => {
+  button("Use selected lyrics", resultRow, () => {
     requireProject(); const source = results[Number(resultList.value)]; if (!source) throw new Error("Search and select a recording first.");
     let blocks = source.syncedLyrics ? C.parseLrc(source.syncedLyrics) : [];
     if (!blocks.length) blocks = source.plainLyrics.split(/\r?\n/).filter(line => line.trim()).map(line => C.block(line));
@@ -523,15 +626,17 @@
     project.source = { provider: source.provider, url: source.url };
     selected = 0; refresh(); save({ manualLoad: true });
   });
-  const geniusKey = input("Genius Client Access Token (fallback search)", searchSection, "", "password");
-  geniusKey.autocomplete = "off";
-  const geniusKeyStatus = saved => { geniusKey.placeholder = saved.hasApiKey ? "Genius key saved" : "Enter a Genius API access token"; };
+  const { field: geniusKey, removeButton: removeGeniusKey } = keyInput("Genius Client Access Token (fallback search)", lyricsSearchPanel, "Genius",
+    () => request({ type: "save-genius-settings", apiKey: "" }).then(geniusKeyStatus));
+  const geniusKeyStatus = saved => {
+    geniusKey.placeholder = saved.hasApiKey ? "Genius key saved" : "Enter a Genius API access token";
+    removeGeniusKey.hidden = !saved.hasApiKey;
+  };
   request({ type: "genius-settings" }).then(geniusKeyStatus).catch(fail);
   geniusKey.addEventListener("change", async () => {
     const apiKey = geniusKey.value.trim(); geniusKey.value = "";
     if (apiKey) request({ type: "save-genius-settings", apiKey }).then(geniusKeyStatus).catch(fail);
   });
-  button("Remove Genius key", searchSection, () => request({ type: "save-genius-settings", apiKey: "" }).then(geniusKeyStatus));
   const automatic = section("AI features");
   const usageBox = el("div", null, automatic, { style: "margin:10px 0;padding:10px;border:1px solid #41516d;border-radius:8px" });
   const usageRow = el("div", null, usageBox, { class: "row" });
@@ -592,8 +697,7 @@
 
   const provider = el("select", null, el("label", "Provider", automatic));
   el("option", "OpenAI", provider, { value: "openai" });
-  const apiKey = input("OpenAI API key", automatic, "", "password");
-  apiKey.autocomplete = "off";
+  const { field: apiKey, removeButton: removeApiKey } = keyInput("OpenAI API key", automatic, "OpenAI", () => persistPreferences(""));
   const model = el("select", null, el("label", "Model", automatic));
   el("option", "GPT-6 Astra", model, { value: "gpt-6-astra" });
   el("option", "GPT-5.6 Sol", model, { value: "gpt-5.6-sol" });
@@ -621,6 +725,7 @@
     return preferenceQueue.then(saved => {
       hasApiKey = saved.hasApiKey;
       apiKey.placeholder = hasApiKey ? "API key saved — enter a new key to replace it" : "Enter your OpenAI API key";
+      removeApiKey.hidden = !hasApiKey;
       preferredLanguage = message.language;
     });
   }
@@ -629,6 +734,7 @@
     convertRomaji.checked = saved.convertRomaji !== false;
     model.value = saved.model; preferredLanguage = saved.language; hasApiKey = saved.hasApiKey;
     apiKey.placeholder = hasApiKey ? "API key saved — enter a new key to replace it" : "Enter your OpenAI API key";
+    removeApiKey.hidden = !hasApiKey;
 
     targetLanguage.value = preferredLanguage;
   });
@@ -637,7 +743,6 @@
     if (apiKey.value.trim()) persistPreferences(apiKey.value).then(() => { apiKey.value = ""; }).catch(fail);
   });
   model.addEventListener("change", () => { persistPreferences().catch(fail); });
-  button("Remove saved API key", automatic, async () => { await persistPreferences(""); apiKey.value = ""; });
   targetLanguage.addEventListener("change", () => {
     if (!project) return;
     if (!/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(targetLanguage.value.trim())) {
@@ -646,7 +751,7 @@
     }
     setLanguage(targetLanguage.value.trim());
   });
-  el("p", "Translate all lines sends the lyrics to OpenAI once for translation and, when selected, contextual Japanese furigana. It does not listen to audio. Dictionary generation remains available under Display & timing. OpenAI API charges apply. Keys stay in extension storage and are excluded from exports.", automatic, { class: "muted" });
+  el("p", "Translate all lines sends the lyrics to OpenAI once for translation and, when selected, contextual Japanese furigana. Lines already in the target language keep an empty translation. It does not listen to audio. Dictionary generation remains available under Display & timing. OpenAI API charges apply. Keys stay in extension storage and are excluded from exports.", automatic, { class: "muted" });
   const automaticStatus = el("p", "", automatic, { role: "status" });
   const translateButton = button("Translate all lines", automatic, async () => {
     if (translateButton.disabled) return;
@@ -677,7 +782,7 @@
       const translations = response.lines;
       if (!Array.isArray(translations) || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(response.originalLanguage)) throw new Error('Invalid AI response.');
       const converted = translations.some(row => project.blocks.find(b => b.id === row.id)?.text !== row.text);
-      if (converted && !window.confirm('Apply Japanese romaji conversion to the original lyrics as well? Timing and other translations will be kept.')) { automaticStatus.textContent = 'Translation discarded.'; return; }
+      if (converted && !window.confirm('Apply Japanese romaji conversion to the original lyrics as well? Timing will be kept.')) { automaticStatus.textContent = 'Translation discarded.'; return; }
       const byId = new Map(translations.map(row => [row.id, row]));
       if (translations.length !== project.blocks.length || byId.size !== project.blocks.length) throw new Error("Incomplete AI result.");
       for (const row of project.blocks) {
@@ -688,7 +793,7 @@
       for (const row of project.blocks) {
         if (row.text !== byId.get(row.id).text) delete row.furigana;
         row.text = byId.get(row.id).text;
-        row.translations[language] = byId.get(row.id).translation;
+        row.translations = { [language]: byId.get(row.id).translation };
         if (withReadings) row.furigana = byId.get(row.id).furigana;
       }
       project.originalLanguage = response.originalLanguage;
@@ -704,12 +809,14 @@
     }
   });
   el("h3", "AudioShake timing", automatic);
-  const audioKey = input("AudioShake API key", automatic, "", "password");
-  audioKey.autocomplete = "off";
+  const { field: audioKey, removeButton: removeAudioKey } = keyInput("AudioShake API key", automatic, "AudioShake", () => saveAudioPreferences(true));
   const audioLanguage = el("select", null, el("label", "Audio language", automatic));
   for (const [code, label] of [["auto", "Auto"], ["en", "English"], ["ja", "Japanese"], ["nl", "Dutch"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["pt", "Portuguese"], ["it", "Italian"], ["ko", "Korean"], ["zh", "Chinese"]]) el("option", label, audioLanguage, { value: code });
   let audioPreferences = Promise.resolve();
-  const showAudioSettings = saved => { audioKey.placeholder = saved.hasApiKey ? "AudioShake key saved" : "Enter your AudioShake API key"; };
+  const showAudioSettings = saved => {
+    audioKey.placeholder = saved.hasApiKey ? "AudioShake key saved" : "Enter your AudioShake API key";
+    removeAudioKey.hidden = !saved.hasApiKey;
+  };
   const audioReady = request({ type: "audioshake-settings" }).then(saved => { audioLanguage.value = saved.language; showAudioSettings(saved); });
   audioReady.catch(fail);
   function saveAudioPreferences(clear = false) {
@@ -721,13 +828,12 @@
   }
   audioKey.addEventListener("change", () => saveAudioPreferences().catch(fail));
   audioLanguage.addEventListener("change", () => saveAudioPreferences().catch(fail));
-  button("Remove AudioShake key", automatic, () => saveAudioPreferences(true));
   const existingLabel = el("label", null, automatic, { class: "checkbox-row" });
   const useExisting = el("input", null, existingLabel, { type: "checkbox" });
   el("span", "Use existing lyrics", existingLabel);
-  el("p", "Generate timed lyrics downloads this complete video’s audio and uploads it to AudioShake, along with the lyrics when selected. Otherwise AudioShake recognizes the lyrics. Use existing lyrics also recalculates existing timing for live performances or covers, preserving text, translations and furigana. AudioShake charges apply. Up to 45 minutes; no livestreams. Review the preview before Apply. Cancel stops local work; a submitted server task may continue.", automatic, { class: "muted" });
+  el("p", "Generate timed lyrics uses this complete video’s audio, reusing a temporary download when available, and uploads it to AudioShake along with the current lyrics when selected. Otherwise AudioShake recognizes the lyrics. Use existing lyrics also recalculates existing timing for live performances or covers, preserving text, translations and furigana. AudioShake charges apply. Up to 45 minutes; no livestreams. When timing finishes, review the preview before Apply. Cancel stops local work; a submitted server task may continue.", automatic, { class: "muted" });
   let timingHadText = false;
-  let helperReady = false, timingJob = null, timingBusy = false, timingPollBusy = false;
+  let helperReady = false, helperAvailable = false, timingJob = null, timingBusy = false, timingPollBusy = false, clearingAudio = false;
   const timingStatus = el("p", "", automatic, { role: "status" });
   const timingPreview = el("div", null, automatic, { style: "max-height:240px;overflow:auto" });
   let shownTimingResult = null;
@@ -777,15 +883,32 @@
     if (timingJob?.status !== "ready" && !window.confirm("Discard this task locally? A submitted AudioShake task may continue and be charged. You will no longer be able to resume it here.")) return;
     timingJob = await request({ type: "timing-discard", videoId }); showTimingJob();
   });
+  const clearAudio = button("Clear audio file", timingActions, async () => {
+    if (clearAudio.disabled) return;
+    const token = generation, requestedId = videoId;
+    clearingAudio = true; updateTimingControls();
+    audioCacheStatus.textContent = "Removing audio file…";
+    try {
+      const result = await request({ type: "timing-clear-audio", videoId: requestedId });
+      if (token !== generation) return;
+      audioCacheStatus.textContent = result.removed ? "Audio file removed. The next timing request will download it again." : "No downloaded audio file is stored for this video.";
+    } catch (error) {
+      if (token === generation) audioCacheStatus.textContent = error.message;
+    } finally { clearingAudio = false; updateTimingControls(); }
+  });
+  const audioCacheStatus = el("p", "", automatic, { class: "muted", role: "status" });
+  let audioCacheVideoId = null;
   function updateTimingControls() {
-    timingStart.disabled = !helperReady || timingBusy || !!timingJob;
+    timingStart.disabled = !helperReady || timingBusy || clearingAudio || !!timingJob;
     timingResume.hidden = !timingJob || !["interrupted", "cancelled"].includes(timingJob.status);
-    timingResume.disabled = !helperReady || timingBusy;
+    timingResume.disabled = !helperReady || timingBusy || clearingAudio;
     timingCancel.hidden = !timingJob || timingJob.status !== "running";
     timingApply.hidden = !timingJob || timingJob.status !== "ready";
     timingDiscard.hidden = !timingJob || timingJob.status === "running";
+    clearAudio.disabled = !helperAvailable || !videoId || timingBusy || clearingAudio || timingJob?.status === "running";
   }
   function showTimingJob() {
+    if (audioCacheVideoId !== videoId) { audioCacheVideoId = videoId; audioCacheStatus.textContent = ""; }
     updateTimingControls();
     if (!timingJob) { timingStatus.textContent = ""; timingPreview.replaceChildren(); shownTimingResult = null; return; }
     const previewKey = timingJob.status === "ready" ? `${timingJob.requestId}:${KaraokeTiming.fingerprint(project)}` : null;
@@ -833,6 +956,7 @@
     helperStatus.textContent = "Checking helper and dependencies…";
     const state = await request({ type: "helper-status" });
     helperReady = state.ready;
+    helperAvailable = state.protocol === 1;
     helperStatus.textContent = state.error || `${state.distro?.PRETTY_NAME || "Linux"} · Protocol ${state.protocol}${state.protocol !== 1 ? " (update required)" : ""}\n` + Object.entries(state.dependencies || {}).map(([name, info]) => `${name}: ${info.available ? info.version : "missing"}`).join("\n");
     helperStatus.style.whiteSpace = "pre-wrap";
     installation.open = !helperReady;
@@ -846,7 +970,7 @@
   try {
     repositorySection.hidden = localStorage.getItem("runrunKaraoke.developerMode") !== "true";
   } catch (_) { /* Keep developer controls hidden when localStorage is unavailable. */ }
-  el("p", "One repository is used for the translations catalog, Surprise Me and publication. Publishing saves every local translation language, with lyrics, timing, furigana and display settings. A GitHub token with write access is required.", repositorySection, { class: "muted" });
+  el("p", "One repository is used for the translations catalog, Surprise Me and publication. Publishing saves the current translation to its language file, with lyrics, timing, furigana and display settings. Other language files remain on GitHub. A GitHub token with write access is required.", repositorySection, { class: "muted" });
   // Keep the saved token inside an extension-origin frame, outside YouTube's DOM.
   const repositoryFrame = el("div", null, repositorySection, { style: "position:relative" });
   const repositoryPreferences = el("iframe", null, repositoryFrame, {
@@ -860,17 +984,6 @@
 
     }
   });
-  const repositoryQuery = input("Filter catalog by title, artist or video ID (blank: this video)", repositorySection);
-  const repositoryResults = el("select", null, repositorySection, { "aria-label": "Repository projects", style: "width:100%;margin:8px 0" });
-  let catalogEntries = [], catalogSource = null;
-  function filterCatalog() {
-    const q = repositoryQuery.value.trim().toLocaleLowerCase();
-    repositoryResults.replaceChildren();
-    for (const entry of catalogEntries.filter(e => q ? `${e.title} ${e.artist} ${e.videoId}`.toLocaleLowerCase().includes(q) : e.videoId === videoId)) {
-      el("option", `${entry.title || entry.videoId} · ${entry.artist} · ${entry.translationLanguage}${entry.videoId === videoId ? " · this video" : " · other video"}`, repositoryResults, { value: entry.file });
-    }
-  }
-  repositoryQuery.addEventListener("input", filterCatalog);
   const repositoryActions = el("div", null, repositorySection, { class: "row" });
   const repositoryStatus = el("p", "", repositorySection, { id: "repository-status", role: "status", "aria-live": "polite" });
   function repositoryNotify(message, error = false) {
@@ -884,72 +997,9 @@
       catch (error) { repositoryNotify(error.message || String(error), true); }
     });
   }
-  const catalogButton = repositoryButton("Search repository", async () => {
-    requireProject(); const currentGeneration = generation;
-    catalogButton.disabled = true; catalogButton.textContent = "Searching…";
-    try {
-      const preferences = await request({ type: "repository-settings" });
-      const entries = await request({ type: "repository-search", source: preferences.retrieval });
-      if (generation !== currentGeneration) return;
-      catalogEntries = entries; catalogSource = preferences.retrieval; filterCatalog();
-      repositoryNotify(`${repositoryResults.options.length} matching projects. Change the filter to search the catalog.`);
-    } finally { catalogButton.disabled = false; catalogButton.textContent = "Search repository"; }
-  });
-  const repositoryLoad = repositoryButton("Load selected project", async () => {
-    requireProject();
-    const entry = catalogEntries.find(e => e.file === repositoryResults.value);
-    if (!entry) throw new Error("Search and select a repository project first.");
-    if (entry.videoId !== videoId) {
-      repositoryNotify(`Open https://www.youtube.com/watch?v=${entry.videoId} to load this performance.`); return;
-    }
-    const currentGeneration = generation, snapshot = JSON.stringify(project);
-    repositoryLoad.disabled = true;
-    try {
-      const preferences = await request({ type: "repository-settings" });
-      if (JSON.stringify(preferences.retrieval) !== JSON.stringify(catalogSource)) throw new Error("Retrieval settings changed. Search again.");
-      const imported = C.validate(await request({ type: "repository-load", file: entry.file, videoId, source: catalogSource }));
-      if (generation !== currentGeneration || JSON.stringify(project) !== snapshot) throw new Error("Project changed while downloading. Load again to review replacement.");
-      await acceptProject(imported);
-    } finally { repositoryLoad.disabled = false; }
-  });
-  const deletionReview = el('div', null, repositorySection, { role: 'region', 'aria-label': 'Confirm GitHub deletion' });
-  deletionReview.hidden = true;
-  const deleteRemote = repositoryButton('Delete selected GitHub file', async () => {
-    requireProject();
-    const entry = catalogEntries.find(e => e.file === repositoryResults.value);
-    if (!entry) throw new Error('Search and select a repository project first.');
-    const token = generation;
-    deleteRemote.disabled = true;
-    try {
-      const settings = await request({ type: 'repository-settings' });
-      const target = settings.repository;
-      if (JSON.stringify(target) !== JSON.stringify(catalogSource)) throw new Error('Repository settings changed. Search again.');
-      const review = await request({ type: 'repository-delete-inspect', target, file: entry.file, videoId: entry.videoId });
-      if (token !== generation) return;
-      deletionReview.replaceChildren();
-      el('h3', 'Delete this GitHub file?', deletionReview);
-      el('p', `${target.repo} · ${target.branch} · ${review.file}`, deletionReview);
-      el('p', `Deletes this file (${review.languages.join(', ')}). Your local project is kept.`, deletionReview);
-      const confirm = button('Confirm deletion', deletionReview, async () => {
-        if (token !== generation) throw new Error('Video changed. Review deletion again.');
-        confirm.disabled = true; cancel.disabled = true;
-        try {
-          await request({ type: 'repository-delete', target, file: review.file, sha: review.sha, videoId: entry.videoId });
-          if (token === generation) {
-            catalogEntries = catalogEntries.filter(e => e.file !== review.file); filterCatalog();
-            availableCatalog = availableCatalog.filter(e => e.file !== review.file); updatePublicationState();
-            repositoryNotify('GitHub file deleted. Local project kept. The catalog updates after its Action finishes.');
-          }
-        } catch (error) { repositoryNotify(error.message, true); }
-        finally { deletionReview.hidden = true; }
-      });
-      const cancel = button('Cancel deletion', deletionReview, () => { deletionReview.hidden = true; repositoryNotify('Deletion cancelled.'); });
-      deletionReview.hidden = false; deletionReview.scrollIntoView({ block: 'nearest' });
-    } finally { deleteRemote.disabled = false; }
-  });
   const publicationReview = el("div", null, repositorySection, { role: "region", "aria-label": "Confirm GitHub publication", style: "padding:12px;border:1px solid #b58aef;border-radius:8px;margin-top:12px" });
   publicationReview.hidden = true;
-  const publishButton = repositoryButton("Publish project to GitHub", async () => {
+  const publishButton = repositoryButton("Publish translation to GitHub", async () => {
     publicationReview.hidden = true;
     requireProject();
     if (!project.blocks.some(b => b.text.trim())) throw new Error("Load lyrics before publishing.");
@@ -975,8 +1025,8 @@
           repositoryNotify("Publishing…");
           await request({ type: "repository-publish", project: snapshot, videoTitle, sha: destination.sha, target: destination.target });
           publicationReview.hidden = true;
-          if (generation === currentGeneration) { repositorySection.open = false; catalogKnown = false; }
-          if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes; search again shortly.`);
+          if (generation === currentGeneration) { repositorySection.open = false; catalogKnown = false; updatePublicationState(); }
+          if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes.`);
         } catch (error) {
           publicationReview.hidden = true;
           repositoryNotify(error.message || String(error), true);
@@ -990,25 +1040,60 @@
       repositoryNotify("Review the destination below and choose Confirm publication.");
       publicationReview.scrollIntoView({ block: "nearest" });
       confirm.focus({ preventScroll: true });
-    } finally { publishButton.disabled = false; publishButton.textContent = "Publish project to GitHub"; }
+    } finally { publishButton.disabled = false; publishButton.textContent = "Publish translation to GitHub"; }
   });
-  const manual = section("Import / export");
-  const deleteLocal = button('Delete local project', manual, async () => {
+  const deleteRemote = repositoryButton('Delete translation from GitHub', async () => {
     requireProject();
-    if (!window.confirm('Delete this entire local video project, including lyrics, all translations, timing and furigana? GitHub files remain. Automatic loading stays off for this video until you load it manually.')) return;
+    publicationReview.hidden = true;
+    const token = generation, requestedId = videoId, language = project.translationLanguage;
+    deleteRemote.disabled = true;
+    try {
+      const settings = await request({ type: 'repository-settings' });
+      if (!settings.repository?.repo) throw new Error('GitHub repository is missing.');
+      if (!settings.hasToken) throw new Error('GitHub token is missing.');
+      const target = settings.repository;
+      const entries = await request({ type: 'catalog-search', videoId: requestedId });
+      if (token !== generation || project?.translationLanguage !== language) throw new Error('Video or translation language changed. Start deletion again.');
+      const entry = entries.find(row => row.videoId === requestedId && row.translationLanguage === language);
+      if (!entry) throw new Error(`No ${language} translation was found on GitHub for this video.`);
+      const review = await request({ type: 'repository-delete-inspect', target, file: entry.file, videoId: requestedId });
+      if (token !== generation || project?.translationLanguage !== language) throw new Error('Video or translation language changed. Start deletion again.');
+      if (review.languages.length !== 1 || review.languages[0] !== language) throw new Error('This GitHub file contains multiple or different translation languages and cannot be deleted as this single translation.');
+      if (!window.confirm(`Delete the ${language} translation from GitHub?\n\n${target.repo} · ${target.branch}\n${review.file}\n\nYour local lyrics and translations will be kept.`)) {
+        return;
+      }
+      if (token !== generation || project?.translationLanguage !== language) throw new Error('Video or translation language changed. Start deletion again.');
+      await request({ type: 'repository-delete', target, file: review.file, sha: review.sha, videoId: requestedId });
+      if (token === generation) {
+        availableCatalog = entries.filter(row => row.file !== review.file); catalogKnown = true;
+        renderCatalogChoices(availableCatalog, token, requestedId);
+        updatePublicationState(); updateLyricsSource();
+        repositoryNotify('Translation deleted from GitHub. Local lyrics and translations kept. The catalog updates after the repository Action finishes.');
+      }
+    } finally { deleteRemote.disabled = false; }
+  });
+  deleteRemote.className = 'danger';
+  deleteRemote.hidden = true;
+  const manual = section("Import / export");
+  const clearLines = button('Clear all lines', null, async () => {
+    requireProject();
+    if (!project.blocks.length) return;
+    if (!window.confirm('Clear all lyric lines, including all translations, timing and furigana?')) return;
     generation++;
     const target = project, token = generation, state = storageState;
     state.deleting = true; panel.inert = true;
-    deleteLocal.disabled = true;
+    clearLines.disabled = true;
     try {
       await saveQueue;
       if (generation !== token || project !== target) return;
-      const deleted = await request({ type: 'project-delete', videoId, revision: state.revision });
-      Object.assign(state, deleted);
+      const cleared = await request({ type: 'project-clear-lines', videoId, revision: state.revision });
+      Object.assign(state, cleared);
       if (generation !== token) return;
-      project = C.project(videoId, currentVideoTitle()); localDeleted = true; selected = 0; refresh(); notify('Local project deleted. Choose catalog lyrics or search to start again.');
-    } finally { state.deleting = false; panel.inert = false; deleteLocal.disabled = false; }
+      project = C.validate(cleared.project); localDeleted = true; selected = 0; refresh(); notify('All lines cleared. Add a line, load lyrics or generate timed lyrics to start again.');
+    } finally { state.deleting = false; panel.inert = false; clearLines.disabled = false; }
   });
+  clearLines.className = "danger";
+  clearLines.hidden = true;
   const importFile = input("Import .lrc or project .json", manual, "", "file"); importFile.accept = ".lrc,.json";
   importFile.addEventListener("change", async () => {
     try {
@@ -1042,58 +1127,45 @@
     const link = el("a", null, root, { href: url, download: `karaoke-${videoId}${timed ? "" : "-untimed"}.lrc` });
     link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  el("p", "Project JSON preserves original language, all translation languages, selected language, timing, furigana and display settings. Use JSON to back up translations. LRC exports original lyrics only, with or without timing. Timed export requires every line to have a start time and includes the delay.", manual, { class: "muted" });
+  el("p", "Project JSON preserves original language, the current translation and its language, timing, furigana and display settings. Use JSON to back up translations. LRC exports original lyrics only, with or without timing. Timed export requires every line to have a start time and includes the delay.", manual, { class: "muted" });
   const tutorial = KaraokeTutorial.create({ root, panel, trigger: tutorialButton, storage: browser.storage.local, steps: [
-    { id: "surprise", chapter: "Basics", title: "Surprise me", target: () => surpriseButton, text: "Surprise Me opens a random catalog video with Karaoke and Settings on. Your local edits stay safe. Following a link or entering another address turns Karaoke off and closes Settings." },
-    { id: "catalog", chapter: "Basics", title: "Choose a catalog translation", target: () => matchingCatalog, text: "Translations catalog shows the languages available for this video. English loads automatically when you have no local changes. If English is unavailable, choose a language yourself. You can always choose another translation; replacing your work asks for confirmation." },
-    { id: "search", chapter: "Basics", title: "Find your song", target: () => query, text: "Search by song or artist. The addon tries LRCLIB first, then Genius if no lyrics are found. Choose a result and click Use selected lyrics. You can always search instead of using a catalog translation." },
-    { id: "languages", chapter: "Basics", title: "Choose a translation language", target: () => editorLanguage, text: "Enter the current translation’s language code; its text stays intact. AI translations already have the selected target language. Use Saved translations to switch or Add language for another translation. Lyrics language identifies the original text. English is the default; your last choice is remembered." },
-    { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Furigana are small kana readings above kanji. Generate them with the dictionary, then enable Show furigana. The dictionaries download once; lyrics stay on your computer. Check the readings against the singing." },
+    { id: "surprise", chapter: "Basics", title: "Surprise me", target: () => surpriseButton.hidden ? tutorialButton : surpriseButton, text: "When available, Surprise Me opens a random catalog video with Karaoke and Settings on. Your local edits stay safe. Following a link or entering another address turns Karaoke off and closes Settings." },
+    { id: "catalog", chapter: "Basics", title: "Choose a catalog translation", target: () => sourceChoices.hidden ? searchSection.querySelector('summary') : sourceChoices, text: "When this video has catalog translations, choose Use lyrics translation from catalog or Search for lyrics. The catalog button stays visible but is disabled when search is selected. The catalog offers a language selector only when multiple translations exist. Without a catalog translation, only search is shown. Replacing existing lyrics asks for confirmation." },
+    { id: "search", chapter: "Basics", title: "Find your song", target: () => lyricsSearchPanel.hidden ? searchChoice : query, text: "Choose Search for lyrics to search by song or artist. The addon tries LRCLIB first, then Genius if no lyrics are found. After searching, choose a result and click Use selected lyrics. If nothing matches, No results found appears. This is an alternative to loading a catalog translation." },
+    { id: "languages", chapter: "Basics", title: "Choose a translation language", target: () => editorLanguage, text: "Enter a language code such as en, fr or nl. This keeps the current text; Translate all lines replaces it with a new translation after confirmation. Each song has one local translation. Lyrics language identifies the original text. English is the default; your last choice is remembered." },
+    { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Furigana are small kana readings above kanji. Generate them with the dictionary; Show furigana is enabled automatically. The dictionaries download once; lyrics stay on your computer. Check the readings against the singing." },
     { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics or the translation in Line editor. Changes save locally. Changing original text clears that line’s furigana, so generate or correct its readings afterward." },
     { id: "readings", chapter: "Basics", title: "Correct readings", target: () => rows.querySelector(".block.selected .furigana-editor") || rows.querySelector(".furigana-editor") || generateFurigana, text: "Open Edit furigana readings to correct a word’s kana. Listen to the singer to choose the right reading. Changes save automatically. Generate furigana first if no readings are shown." },
     { id: "global-timing", chapter: "Basics", title: "Align the whole song", target: () => startAt, text: "Start at sets when the first lyric begins, for example 0:33. Or select a line and use Sync with video position. Shifts affecting other lines ask for confirmation. Reset Start at removes the overall shift, keeping individual line times." },
     { id: "line-timing", chapter: "Basics", title: "Time individual lines", target: () => rows.querySelector(".block.selected .row + .row, .block .row + .row") || editor, text: "Enter Start and End as minutes:seconds, such as 3:32.250. Changing a timed Start also shifts later lines after confirmation. End changes only this line. A blank End lasts until the next timed line." },
     { id: "play", chapter: "Basics", title: "Ready to sing", target: () => fontSize, text: "Set size and position separately for the original and translation, or hide either one. These settings save with the project. Opening Settings enables Karaoke; closing it leaves Karaoke on. Use the Karaoke button or Alt+K to toggle it." },
     { id: "ai", chapter: "Advanced", title: "AI features", target: () => automatic.querySelector("summary"), text: "OpenAI translates text and can add furigana. AudioShake recognizes and times lyrics from audio. Each needs its own API key and charges for requests. Starting without lyrics? Generate timed lyrics, apply the result, then translate: both languages use the same timing." },
-    { id: "ai-furigana", chapter: "Advanced", title: "AI features · Translation and furigana", target: () => apiKey, text: "Choose a model and translation language, then click Translate all lines. The source language is detected automatically. Generate furigana and Convert Japanese romaji to kanji/kana are on by default; turn either off if unwanted. Existing work asks for confirmation before replacement. OpenAI receives text, not audio." },
+    { id: "ai-furigana", chapter: "Advanced", title: "AI features · Translation and furigana", target: () => apiKey, text: "Choose a model and translation language, then click Translate all lines. The source language is detected automatically. Generate furigana and Convert Japanese romaji to kanji/kana are on by default; turn either off if unwanted. Existing work asks for confirmation before replacement. Lines already in the target language need no translation. OpenAI receives text, not audio." },
     { id: "ai-audio-setup", chapter: "Advanced", title: "AI features · Audio setup", target: () => helperSection.querySelector("summary"), text: "Audio timing needs the Linux audio helper. Follow Installation instructions and click Check again. Enter your AudioShake key in AI features; leave Audio language on Auto for detection. Videos up to 45 minutes are supported; livestreams are not." },
-    { id: "audio-timing", chapter: "Advanced", title: "AI features · Generate timed lyrics", target: () => useExisting, text: "Keep Use existing lyrics on to fix timing while preserving text, translations and furigana. Turn it off to recognize what is actually sung, useful for live versions or shortened anime intros. Generate timed lyrics sends the full audio to AudioShake and starts a paid task." },
-    { id: "ai-timing-review", chapter: "Advanced", title: "AI features · Review timing", target: () => timingActions, text: "Review the preview before Apply. Recognized lyrics replace existing text, translations and furigana after confirmation. Apply resets the overall timing shift; uncertain matches stay untimed. Discard keeps your project. Cancel stops local waiting; a submitted task may still be charged. Resume continues the same task." },
+    { id: "audio-timing", chapter: "Advanced", title: "AI features · Generate timed lyrics", target: () => useExisting, text: "Keep Use existing lyrics on to fix timing while preserving text, translations and furigana. Turn it off to recognize what is actually sung, useful for live versions or shortened anime intros. Generate timed lyrics sends the full audio to AudioShake and starts a paid task. Downloaded audio is reused while still cached. Clear audio file removes that local copy; the next task downloads it again." },
+    { id: "ai-timing-review", chapter: "Advanced", title: "AI features · Review timing", target: () => timingActions, text: "When timing finishes, review the preview before Apply. Recognized lyrics replace existing text, translations and furigana after confirmation. Apply resets the overall timing shift; uncertain matches stay untimed. Discard keeps your project. Cancel stops local waiting; a submitted task may still be charged. Resume continues the same task." },
     { id: "ai-costs", chapter: "Advanced", title: "AI features · Monthly costs", target: () => usageRow, text: "The total shows this month’s recorded costs. Open Details to choose a month and compare providers. For AudioShake, enter your USD price per API credit and save it. These are estimates for this extension, not your provider’s invoice." },
     { id: "terms", chapter: "Advanced", title: "Fix a recurring reading", target: () => correctionTerm, text: "Enter a word and its correct kana reading, then apply it throughout this song. A shortcut beside a line’s reading can fill these fields for you. Other projects are unchanged." },
     { id: "structure", chapter: "Advanced", title: "Adapt a live performance", target: () => rows.querySelector(".block.selected .row, .block .row") || editor, text: "Add, repeat, move or delete lines to match the performance. Repeated lines need their own timing. Jump to lets you check a line against the video. Set End before the next line starts to leave a gap." },
-    { id: "export", chapter: "Files", title: "Back up to your computer", target: () => exportButton, text: "Export project JSON backs up all languages, timing, furigana and display settings. Use it to keep or share a complete project. LRC exports only original lyrics, with or without timing. API keys and GitHub tokens are never included." },
-    { id: "import", chapter: "Files", title: "Import lyrics from a file", target: () => importFile, text: "Import JSON to restore a complete project. Matching original lyrics let you combine translation languages; overwrites ask for confirmation. Different lyrics require replacing the whole project. LRC imports original lyrics only. Files are loaded into the current video, so check the timing." },
-    { id: "delete-local", chapter: "Files", title: "Delete a local project", target: () => deleteLocal, text: "Delete local project removes this video’s lyrics, all translations, timing and display settings after confirmation. Export JSON first if you want a backup. The catalog copy stays available, but automatic loading stops for this video until you load a project manually." },
+    { id: "export", chapter: "Files", title: "Back up to your computer", target: () => exportButton, text: "Export project JSON backs up original lyrics, the current translation, timing, furigana and display settings. Use it to keep or share a complete project. LRC exports only original lyrics, with or without timing. API keys and GitHub tokens are never included." },
+    { id: "import", chapter: "Files", title: "Import lyrics from a file", target: () => importFile, text: "Import JSON to restore a complete project. Matching original lyrics let you replace the current translation after confirmation. Older files with multiple translations use their selected language. Different lyrics require replacing the whole project. LRC imports original lyrics only. Files are loaded into the current video, so check the timing." },
   ] });
   function replaceAllowed() { return !project.blocks.length || window.confirm("Replace the current lyrics and timing? Export your project first if you want to keep a copy."); }
   const editor = section("Line editor"); editor.open = true;
   editor.before(termCorrection);
+  const editorToolbar = el("div", null, editor, { class: "editor-toolbar" });
+  const clock = el("p", "", editorToolbar);
+  editorToolbar.append(clearLines);
   el("p", "Enter video times as minutes:seconds (for example 3:32 or 3:32.250), including the delay. Blank end times last until the next timed line.", editor, { class: "muted" });
-  const clock = el("p", "", editor);
   const rows = el("div", null, editor, { id: "rows" });
-  const savedLanguages = el('select', null, el('label', 'Saved translations', editor));
-  editor.insertBefore(savedLanguages.parentNode, rows);
-  savedLanguages.addEventListener('change', () => { setLanguage(savedLanguages.value); save(); });
   const editorLanguage = input('Translation language code', editor, 'en');
   editor.insertBefore(editorLanguage.parentNode, rows);
   editorLanguage.addEventListener('change', () => {
     try {
       requireProject();
-      project = C.renameTranslationLanguage(project, editorLanguage.value);
-      setLanguage(project.translationLanguage); save();
+      setLanguage(editorLanguage.value);
     } catch (error) { editorLanguage.value = project?.translationLanguage || 'en'; fail(error); }
   });
-  const newLanguage = input('Add translation language (e.g. en, nl, sr)', editor);
-  editor.insertBefore(newLanguage.parentNode, rows);
-  const addLanguage = button('Add language', editor, () => {
-    const language = newLanguage.value.trim();
-    if (!/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)) throw new Error('Enter a language code such as en, nl or pt-BR.');
-    requireProject();
-    for (const row of project.blocks) row.translations[language] ??= '';
-    setLanguage(language); newLanguage.value = ''; save();
-  });
-  editor.insertBefore(addLanguage, rows);
   const originalLanguage = input('Lyrics language code', editor, 'und');
   editor.insertBefore(originalLanguage.parentNode, rows);
   originalLanguage.addEventListener('change', () => {
@@ -1104,15 +1176,11 @@
   });
   function setLanguage(language) {
     requireProject();
-    project.translationLanguage = language; preferredLanguage = language; targetLanguage.value = language;
-    renderRows(); updatePublicationState(); persistPreferences().catch(fail);
+    project = C.renameTranslationLanguage(project, language);
+    preferredLanguage = project.translationLanguage; targetLanguage.value = preferredLanguage;
+    renderRows(); updatePublicationState(); persistPreferences().catch(fail); save();
   }
   function refreshLanguages() {
-    const languages = project ? C.languages(project) : ['en'];
-    savedLanguages.replaceChildren();
-    for (const language of languages) el('option', language, savedLanguages, { value: language });
-    savedLanguages.value = project?.translationLanguage || 'en';
-    savedLanguages.parentNode.hidden = languages.length < 2;
     editorLanguage.value = project?.translationLanguage || 'en';
     originalLanguage.value = project?.originalLanguage || 'und';
   }
@@ -1120,15 +1188,15 @@
     requireProject();
     const merged = C.mergeTranslations(project, incoming);
     if (merged.replacement) {
-      if (!window.confirm('The original lyrics differ, so translations cannot be merged safely. Replace the entire project, including local translations, timing and display settings? Export JSON first to keep a backup.')) return false;
-    } else if (merged.conflicts.length && !window.confirm(`Replace existing translations: ${merged.conflicts.join(', ')}? Other languages and timing will be kept.`)) return false;
+      if (!window.confirm('The original lyrics differ. Replace the entire project, including the current translation, timing and display settings? Export JSON first to keep a backup.')) return false;
+    } else if (merged.conflicts.length && !window.confirm(`Replace the current ${project.translationLanguage} translation with the ${incoming.translationLanguage} translation? Timing will be kept.`)) return false;
     if (fullImport && project.blocks.length && !merged.replacement) {
-      if (!window.confirm('Import this project’s timing, furigana and display settings as well? Other translation languages will be preserved. Cancel keeps your current project.')) return false;
+      if (!window.confirm('Import this project’s timing, furigana and display settings as well? Cancel keeps your current project.')) return false;
       const translations = merged.project.blocks;
       const byId = new Map(translations.map(row => [row.id, row]));
       merged.project = { ...incoming, blocks: incoming.blocks.map((row, i) => ({ ...row, translations: (byId.get(row.id) || translations[i]).translations })) };
     }
-    project = C.validate(merged.project); selected = 0; localDeleted = false; refresh();
+    project = C.singleTranslation(merged.project); selected = 0; localDeleted = false; refresh();
     await save({ manualLoad: true }); return true;
   }
   const sources = section("Source");
@@ -1153,7 +1221,7 @@
     targetLanguage.value = project?.translationLanguage || "en";
     title.textContent = videoId ? "Loading video title…" : "Open a YouTube watch page to begin.";
     updateVideoTitle();
-    renderRows(); renderSources();
+    renderRows(); renderSources(); updatePublicationState();
   }
   function insertLine(index) {
     requireProject();
@@ -1162,6 +1230,7 @@
     renderRows(); save();
   }
   function renderRows() {
+    clearLines.hidden = !project?.blocks.length;
     refreshLanguages();
     rows.replaceChildren();
     if (!project?.blocks.length) button("Add first line", rows, () => insertLine(0));
@@ -1250,8 +1319,13 @@
   function renderOriginal(node, row) {
     node.replaceChildren();
     if (!row) return;
-    if (!project.furiganaEnabled || !row.furigana) { node.textContent = row.text; return; }
-    for (const [text, reading] of row.furigana) {
+    if (!project.furiganaEnabled || !row.furigana) { node.textContent = row.text.trim(); return; }
+    const start = row.text.length - row.text.trimStart().length, end = row.text.trimEnd().length;
+    let offset = 0;
+    for (const [segment, reading] of row.furigana) {
+      const text = segment.slice(Math.max(0, start - offset), Math.max(0, end - offset));
+      offset += segment.length;
+      if (!text) continue;
       if (!reading) { node.append(document.createTextNode(text)); continue; }
       const aligned = C.alignKana(text, reading);
       node.append(document.createTextNode(aligned.prefix));
@@ -1271,13 +1345,14 @@
     const currentId = location.pathname === "/watch" ? new URL(location.href).searchParams.get("v") : null;
     if (currentId !== videoId) {
       enabled = false; globalThis.KaraokeSetPressed?.(false); panel.hidden = true;
-      publicationReview.hidden = true; deletionReview.hidden = true;
+      publicationReview.hidden = true;
       availableCatalog = []; catalogKnown = false; localDeleted = false;
-      videoId = currentId; project = null; selected = 0; results = []; resultList.replaceChildren(); automaticStatus.textContent = ""; generation++;
+      lyricsSource = 'catalog'; updateLyricsSource(); catalogCheckStatus.hidden = true;
+      videoId = currentId; project = null; selected = 0; resetSearchResults(); automaticStatus.textContent = ""; generation++;
       timingJob = null; shownTimingResult = null; showTimingJob();
       surpriseCheck++; surpriseButton.hidden = true;
       matchingCatalog.replaceChildren();
-      catalogEntries = []; catalogSource = null; repositoryResults.replaceChildren(); repositoryQuery.value = ""; repositoryNotify("");
+      repositoryNotify("");
       query.value = ""; queryDirty = false; queryReady = false;
       const token = generation; refresh(); notify("");
       if (videoId && /^[\w-]{11}$/.test(videoId)) {
@@ -1303,7 +1378,7 @@
           storageState = saved;
           localDeleted = saved.blocked;
           project = saved.project ? C.validate(saved.project) : C.project(requestedId, currentVideoTitle() || document.title.replace(/ - YouTube$/, '').trim());
-          project.translationLanguage = preferredLanguage;
+          if (!saved.project) project.translationLanguage = preferredLanguage;
           searchSection.open = !project.blocks.length;
           void refreshSurpriseButton();
           refresh(); notify(saved.project ? 'Loaded saved project.' : 'Choose catalog translations or search for lyrics.');
@@ -1337,7 +1412,7 @@
     overlay.style.fontSize = `${fontSize.value}px`;
     overlay.style.bottom = `${position.value}%`;
     const nextRow = active && showNext.checked ? project.blocks.filter(row => row.start !== null && row.start > active.start && row.text.trim()).sort((a, b) => a.start - b.start)[0] : null;
-    const values = [active?.text || "", active?.translations[project?.translationLanguage] || "", nextRow?.text || ""];
+    const values = [active?.text || "", active?.translations[project?.translationLanguage] || "", nextRow?.text || ""].map(text => text.trim());
     const signature = JSON.stringify([values, project?.furiganaEnabled, active?.furigana, nextRow?.furigana]);
     if (signature !== lastCaption) { renderOriginal(original, active); translated.textContent = values[1]; renderOriginal(next, nextRow); translated.hidden = !values[1]; next.hidden = !values[2]; lastCaption = signature; }
     if (!panel.hidden) clock.textContent = `Video: ${(media?.currentTime || 0).toFixed(2)}s · ${project?.blocks.length || 0} lines`;

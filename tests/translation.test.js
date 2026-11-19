@@ -8,6 +8,41 @@ const entries = [{ id: 'b', translation: 'Een nieuwe ochtend' }, { id: 'a', tran
 test('translation maps reordered responses by ID and keeps repeated lines separate', () => {
   assert.deepEqual(T.parse(response(entries), lines), entries.toReversed());
 });
+test('explicit same-language results become empty translations while missing and invalid values fail', () => {
+  assert.deepEqual(T.parse(response([{ id: 'b', translation: null }, { id: 'a', translation: null }]), lines),
+    lines.map(({ id }) => ({ id, translation: '' })));
+  for (const invalid of [undefined, '', ' ', false, 0, {}, []]) {
+    assert.throws(() => T.parse(response([{ id: 'a', translation: null }, { id: 'b', translation: invalid }]), lines));
+  }
+});
+for (const includeFurigana of [false, true]) test(`mixed-language lyrics skip target-language lines with furigana ${includeFurigana ? 'on' : 'off'}`, async () => {
+  const original = [
+    { id: 'a', text: '青い空' },
+    { id: 'b', text: 'A blue sky!' },
+    { id: 'c', text: 'A blue sky!' },
+    { id: 'd', text: '' }
+  ];
+  const result = await T.translate({ apiKey: 'test', model: 'gpt-5', language: 'en', lines: original, includeFurigana }, async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.deepEqual(JSON.parse(body.input).lines, original);
+    assert.match(body.instructions, /language of each supplied lyrics line individually/);
+    assert.match(body.instructions, /already entirely in the target language, return null/);
+    assert.deepEqual(body.text.format.schema.properties.lines.items.properties.translation.type, ['string', 'null']);
+    return { ok: true, json: async () => translationResponse(original.toReversed().map(row => ({
+      ...row,
+      translation: row.id === 'a' ? 'A blue sky' : row.id === 'd' ? '' : null,
+      ...(includeFurigana ? { segments: row.id === 'a'
+        ? [{ text: '青い', reading: 'あおい' }, { text: '空', reading: 'そら' }]
+        : row.text ? [{ text: row.text, reading: null }] : [] } : {})
+    })), 'ja') };
+  });
+  assert.deepEqual(result.lines.map(({ id, text, translation }) => ({ id, text, translation })),
+    original.map(row => ({ ...row, translation: row.id === 'a' ? 'A blue sky' : '' })));
+  if (includeFurigana) {
+    assert.deepEqual(result.lines[0].furigana, [['青い', 'あおい'], ['空', 'そら']]);
+    assert.deepEqual(result.lines[1].furigana, [['A blue sky!', null]]);
+  }
+});
 test('incomplete, refused, malformed, missing, duplicate, unknown and empty translations are rejected', () => {
   for (const invalid of [
     { status: 'incomplete' },

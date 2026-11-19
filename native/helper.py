@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -102,14 +103,35 @@ def validate_request(message):
         raise ValueError("Invalid transcript.")
 
 
+def audio_cache_path(video_id, cache_dir=None, create=True):
+    if not isinstance(video_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        raise ValueError("Invalid video ID.")
+    folder = Path(cache_dir or Path(tempfile.gettempdir()) / f"runrun-karaoke-audio-{os.getuid()}")
+    if create:
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = folder.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise OSError("Audio cache must be a private directory owned by the current user.")
+    return folder / (video_id + ".mp3")
+
+
+def clear_audio_cache(video_id, cache_dir=None):
+    try:
+        audio_cache_path(video_id, cache_dir, create=False).unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 class Worker:
-    def __init__(self, message, emit=send, state_dir=None):
+    def __init__(self, message, emit=send, state_dir=None, cache_dir=None):
         self.message = message
         self.emit = emit
         self.cancelled = threading.Event()
         self.process = None
         self.state_dir = Path(state_dir or Path.home() / ".local/state/runrun-karaoke-helper")
         self.receipt = self.state_dir / (message["requestId"] + ".json")
+        self.cache_dir = Path(cache_dir or Path(tempfile.gettempdir()) / f"runrun-karaoke-audio-{os.getuid()}")
         self.task_id = None
 
     def check(self):
@@ -224,9 +246,54 @@ class Worker:
             raise ValueError("Audio download is missing or too large.")
         audio = folder / "audio.mp3"
         self.run_command(["ffmpeg", "-nostdin", "-v", "error", "-i", str(sources[0]), "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(audio)], folder, "convert")
-        measured = float(self.run_command(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(audio)], folder, "convert"))
+        self.validate_audio(audio, folder, seconds)
+        return audio
+
+    def validate_audio(self, audio, folder, seconds, stage="convert"):
+        if not audio.is_file() or not 0 < audio.stat().st_size <= 300000000:
+            raise ValueError("Audio file is missing, empty or too large.")
+        measured = float(self.run_command(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(audio)], folder, stage))
         if not math.isfinite(measured) or abs(measured - seconds) > 2:
             raise ValueError("Converted audio duration does not match the video.")
+
+    def cached_audio_path(self):
+        return audio_cache_path(self.message["videoId"], self.cache_dir)
+
+    def prepare_audio(self, folder):
+        self.check()
+        audio = folder / "audio.mp3"
+        cached = None
+        try:
+            cached = self.cached_audio_path()
+            info = cached.lstat()
+            if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 300000000:
+                raise ValueError("Invalid cached audio.")
+            # Use a task-local copy so cleanup or another task cannot remove an active upload.
+            shutil.copyfile(cached, audio)
+            self.validate_audio(audio, folder, self.message["duration"], "checking cached audio")
+        except (OSError, ValueError, RuntimeError):
+            audio.unlink(missing_ok=True)
+        else:
+            self.progress("reusing downloaded audio")
+            return audio
+
+        self.check()
+        audio = self.download(folder)
+        self.check()
+        if cached is not None:
+            temporary = None
+            try:
+                # Publish only a complete, validated MP3; partial downloads never enter the cache.
+                with tempfile.NamedTemporaryFile(dir=self.cache_dir, prefix=".audio-", delete=False) as file:
+                    temporary = Path(file.name)
+                shutil.copyfile(audio, temporary)
+                self.check()
+                temporary.replace(cached)
+            except OSError:
+                pass  # An unavailable cache must not prevent timing a successfully downloaded track.
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
         return audio
 
     def submit(self):
@@ -234,7 +301,7 @@ class Worker:
             raise RuntimeError("Helper dependencies are missing. Open Installation instructions and Check again.")
         with tempfile.TemporaryDirectory(prefix="runrun-audio-") as temporary:
             folder = Path(temporary)
-            audio = self.download(folder)
+            audio = self.prepare_audio(folder)
             asset = self.upload(audio, "audio/mpeg")
             target = {"model": "alignment", "formats": ["json"]}
             if self.message.get("language", "auto") != "auto":
@@ -253,7 +320,7 @@ class Worker:
             self.task_id = task["id"]
             self.record({"state": "submitted", "taskId": self.task_id, "videoId": self.message["videoId"]})
             self.emit({"type": "task", "taskId": self.task_id})
-        # Temporary audio/transcript are already gone while the remote task processes.
+        # Task files are gone; only validated audio remains cached for another timing request.
 
     def poll(self):
         for _ in range(720):
@@ -329,6 +396,15 @@ def main():
         while message := read_message(sys.stdin.buffer):
             if message.get("type") == "status":
                 send({"type": "status", **status()})
+            elif message.get("type") == "clear-audio-cache":
+                if thread and thread.is_alive():
+                    send({"type": "error", "error": "Wait for the timing task to stop before removing audio."})
+                    continue
+                try:
+                    removed = clear_audio_cache(message.get("videoId"))
+                    send({"type": "audio-cache-cleared", "removed": removed})
+                except (OSError, ValueError):
+                    send({"type": "error", "error": "Could not remove the cached audio for this video."})
             elif message.get("type") == "cancel":
                 if worker:
                     worker.cancelled.set()

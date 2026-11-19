@@ -219,13 +219,15 @@ test('catalog expands legacy multilingual files and prefers a dedicated language
   const entries=await R.catalog(source);assert.equal(entries.length,2);assert.equal(entries[0].translationLanguage,'en');
   assert.equal(entries.find(e=>e.translationLanguage==='nl').file,'translations/song/nl.json');
 });
-test('multilingual publication makes one commit and refuses a changed branch',async t=>{
+test('publication writes only the current language using the existing tree',async t=>{
   const p=project();p.blocks[0].translations.nl='Zee';
   const sha='a'.repeat(40),tree='b'.repeat(40),commit='c'.repeat(40);
   const review=[{data:{object:{sha}}},{data:{tree:{sha:tree}}},{data:{tree:[]}}];
   const calls=mock(t,[...review,{data:githubUser},{data:{sha:tree}},{data:{sha:commit}},{data:{}}]);
   await R.publishBatch(source,'token',p,sha,'Example');
-  const treeBody=JSON.parse(calls[4].options.body);assert.equal(treeBody.tree.length,2);
+  const treeBody=JSON.parse(calls[4].options.body);assert.equal(treeBody.tree.length,1);
+  assert.equal(treeBody.base_tree,tree);
+  assert.match(treeBody.tree[0].path,/\/en\.json$/);
   for(const item of treeBody.tree){const copy=JSON.parse(item.content);assert.deepEqual(Object.keys(copy.blocks[0].translations),[copy.translationLanguage]);assert.deepEqual(copy.display,p.display);}
   assert.equal(calls.filter(c=>c.url.endsWith('/git/commits')&&c.options.method==='POST').length,1);
   assert.deepEqual(JSON.parse(calls.at(-1).options.body),{sha:commit,force:false});
@@ -250,9 +252,10 @@ test('GitHub deletion refuses remote changes and missing credentials',async t=>{
   await assert.rejects(R.inspectBatch(source,'',p,'Title'),/token is missing/);assert.equal(calls.length,1);
 });
 
-test('selecting an absent editor language does not publish an empty extra translation',async t=>{
-  const p=project();p.translationLanguage='nl';
+test('changing the language publishes its own file and preserves other language files',async t=>{
+  const p=C.renameTranslationLanguage(project(),'nl');
   mock(t,[{data:{object:{sha:'a'.repeat(40)}}},{data:{tree:{sha:'b'.repeat(40)}}},{data:{tree:[]}}]);
   const review=await R.inspectBatch(source,'token',p,'Example');
-  assert.deepEqual(review.files.map(f=>f.language),['en']);
+  assert.deepEqual(review.files.map(f=>f.language),['nl']);
+  assert.match(review.files[0].file,/\/nl\.json$/);
 });

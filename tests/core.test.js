@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../src/core.js');
 
-test('changing a translation language preserves text, other languages and project data through export', () => {
+test('changing a translation language preserves the current text and project data through export', () => {
   const p = C.project('h3chCOV_phw');
   p.originalLanguage = 'ja'; p.offset = 1.25;
   p.blocks = [C.block('歌', 2, 4), C.block('次', 5, 6)];
@@ -13,17 +13,17 @@ test('changing a translation language preserves text, other languages and projec
   const renamed = C.renameTranslationLanguage(p, ' nl ');
   assert.deepEqual(p, before);
   const expected = structuredClone(p); expected.translationLanguage = 'nl';
-  expected.blocks.forEach(row => { row.translations.nl = row.translations.en; delete row.translations.en; });
+  expected.blocks.forEach(row => { row.translations = { nl: row.translations.en }; });
   assert.deepEqual(C.validate(C.exportProject(renamed)), expected);
-  assert.deepEqual(C.languages(renamed), ['de', 'nl']);
+  assert.deepEqual(C.languages(renamed), ['nl']);
   assert.deepEqual(C.renameTranslationLanguage(renamed, 'nl'), renamed);
 });
 
-test('invalid language changes and collisions cannot replace existing translations', () => {
+test('invalid language changes cannot replace existing text', () => {
   const p = C.project('h3chCOV_phw'); p.blocks = [C.block('Example')];
   p.blocks[0].translations = { en: 'Existing', nl: '' };
   const before = structuredClone(p);
-  assert.throws(() => C.renameTranslationLanguage(p, 'nl'), /already exists/);
+  assert.deepEqual(C.renameTranslationLanguage(p, 'nl').blocks[0].translations, { nl: 'Existing' });
   for (const language of ['', 'English', '__proto__', null]) {
     assert.throws(() => C.renameTranslationLanguage(p, language), /language code/);
   }

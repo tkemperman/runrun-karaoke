@@ -3,16 +3,16 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm'),fs=require('node:fs');
 const C=require('../src/core.js'),T=require('../src/timing.js');
 function harness(saved={}) {
- const ports=[];let status={protocol:1,ready:true};
+ const ports=[],nativeMessages=[];let status={protocol:1,ready:true},cleanup={type:'audio-cache-cleared',removed:true};
  const browser={storage:{local:{get:async key=>({[key]:structuredClone(saved[key])}),set:async values=>Object.assign(saved,structuredClone(values)),remove:async key=>{delete saved[key];}}},runtime:{
-  sendNativeMessage:async()=>status,
+  sendNativeMessage:async(_host,message)=>{nativeMessages.push(structuredClone(message));return message.type==='clear-audio-cache'?cleanup:status;},
   connectNative:()=>{
    const p={messages:[],onMessage:{addListener:f=>{p.receive=f;}},onDisconnect:{addListener:f=>{p.lost=f;}},postMessage:m=>p.messages.push(structuredClone(m)),disconnect:()=>p.lost()};ports.push(p);return p;
   }
  }};
  const context={browser,KaraokeUsage:{recordAudio:async()=>{}},KaraokeCore:C,KaraokeTiming:T,crypto:globalThis.crypto,setTimeout,clearTimeout};
  vm.createContext(context);vm.runInContext(fs.readFileSync('src/native.js','utf8')+'\nglobalThis.N=KaraokeNative;',context);
- return {saved,ports,request:m=>context.N.request(m),status:value=>{status=value;}};
+ return {saved,ports,nativeMessages,request:m=>context.N.request(m),status:value=>{status=value;},cleanup:value=>{cleanup=value;}};
 }
 const videoId='F-iI4-BkwXg';
 const project=C.project(videoId);project.blocks=[C.block('朝')];
@@ -64,4 +64,23 @@ test('audio preferences preserve key when omitted and only expose saved status',
  assert.equal(saved.hasApiKey,true);assert.equal(saved.apiKey,undefined);assert.equal(h.saved.audioShakeSettings.apiKey,'private-key');
  await h.request({type:'save-audioshake-settings',language:'auto',apiKey:''});assert.equal((await h.request({type:'audioshake-settings'})).hasApiKey,false);
  await assert.rejects(h.request({type:'save-audioshake-settings',language:'invalid'}));
+});
+test('audio cleanup sends only the current video ID and preserves projects, settings and pending results',async()=>{
+ const saved={audioShakeSettings:{apiKey:'private-key',language:'ja'},[`project:${videoId}`]:project,[`timingJob:${videoId}`]:{status:'ready',taskId:'task-123',result:{lines:[]}}};
+ const before=structuredClone(saved),h=harness(saved);
+ assert.equal((await h.request({type:'timing-clear-audio',videoId})).removed,true);
+ assert.deepEqual(h.nativeMessages,[{type:'clear-audio-cache',videoId}]);
+ assert.deepEqual(saved,before);assert.equal(h.ports.length,0);
+ h.cleanup({type:'audio-cache-cleared',removed:false});
+ assert.equal((await h.request({type:'timing-clear-audio',videoId})).removed,false);
+});
+test('audio cleanup rejects active tasks, invalid video IDs and helper errors',async()=>{
+ const h=seeded();await h.request(start);const count=h.nativeMessages.length;
+ await assert.rejects(h.request({type:'timing-clear-audio',videoId}),/Wait for the timing task/);
+ await assert.rejects(h.request({type:'timing-clear-audio',videoId:'../bad'}),/Invalid video ID/);
+ assert.equal(h.nativeMessages.length,count);
+ const idle=harness();idle.cleanup({type:'error',error:'Could not remove cached audio.'});
+ await assert.rejects(idle.request({type:'timing-clear-audio',videoId}),/Could not remove/);
+ idle.cleanup({type:'audio-cache-cleared'});
+ await assert.rejects(idle.request({type:'timing-clear-audio',videoId}),/Update the Linux helper/);
 });

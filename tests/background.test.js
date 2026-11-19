@@ -257,6 +257,24 @@ test('no English catalog translation leaves the project untouched', async () => 
   const result=await h.request({type:'project-auto',videoId:'abcdefghijk',revision:0});
   assert.equal(result.data.project,null);assert.equal(h.saved['project:abcdefghijk'],undefined);
 });
+test('clearing all lines preserves preferences, blocks auto-loading and rejects stale saves', async () => {
+  const h=harness({}, {}, {...require('../src/repositories.js'),catalog:async()=>assert.fail('Cleared lyrics must not auto-load')});
+  const p=C.project('abcdefghijk','Video title');p.display.fontSize=42;p.translationLanguage='nl';p.originalLanguage='ja';p.offset=3;
+  p.blocks=[C.block('海',1,2)];p.blocks[0].translations={en:'Sea',nl:'Zee'};p.blocks[0].furigana=[['海','うみ']];
+  p.source={provider:'audioshake',url:'https://www.audioshake.ai/'};
+  h.saved.audioShakeSettings={apiKey:'private-key',language:'ja'};
+  await h.request({type:'project-write',project:p,revision:0});
+  const result=await h.request({type:'project-clear-lines',videoId:p.videoId,revision:1});
+  const cleared=result.data.project;
+  assert.deepEqual(cleared,{...p,blocks:[],offset:0,source:null});
+  assert.equal(result.data.blocked,true);assert.equal(result.data.revision,2);
+  assert.equal(h.saved.audioShakeSettings.apiKey,'private-key');
+  assert.equal((await h.request({type:'project-auto',videoId:p.videoId,revision:2})).data.project.blocks.length,0);
+  assert.match((await h.request({type:'project-write',project:p,revision:1})).error,/changed/);
+  assert.match((await h.request({type:'project-clear-lines',videoId:p.videoId,revision:1})).error,/changed/);
+  assert.equal((await h.request({type:'project-read',videoId:p.videoId})).data.project.blocks.length,0);
+  assert.equal((await h.request({type:'project-write',project:p,revision:2,manualLoad:true})).data.blocked,false);
+});
 test('Surprise Me only records a navigation intent and never writes the local project', async () => {
   const h=harness({}, {}, {...require('../src/repositories.js'),catalog:async()=>[{videoId:'abcdefghijk',translationLanguage:'en'}]});
   const p=C.project('abcdefghijk');p.blocks=[C.block('My changes')];

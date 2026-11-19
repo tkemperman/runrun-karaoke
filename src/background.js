@@ -50,6 +50,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       case "timing-status":
       case "timing-cancel":
       case "timing-discard":
+      case "timing-clear-audio":
         data = await KaraokeNative.request(message);
         break;
       case "load-interface":
@@ -71,6 +72,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         } else {
           data = await KaraokeRepositories.retrieve(source, message.file, message.videoId);
           if (message.language) data.translationLanguage = message.language;
+          data = KaraokeCore.singleTranslation(data);
         }
         break;
       }
@@ -161,6 +163,12 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         data = await projectStore.write(message.project.videoId, message.project, message.revision, { manualLoad: message.manualLoad === true }); break;
       case 'project-delete':
         data = await projectStore.write(message.videoId, null, message.revision, { deleted: true }); break;
+      case 'project-clear-lines': {
+        const previous = await projectStore.read(message.videoId);
+        const cleared = { ...(previous.project || KaraokeCore.project(message.videoId)), blocks: [], offset: 0, source: null };
+        data = await projectStore.write(message.videoId, cleared, message.revision, { deleted: true });
+        break;
+      }
       case 'project-auto': {
         const previous = await projectStore.read(message.videoId);
         if (previous.dirty || previous.blocked || previous.revision !== message.revision) { data = previous; break; }
@@ -171,16 +179,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         const imported = await KaraokeRepositories.retrieve(source, entry.file, message.videoId);
         imported.translationLanguage = 'en';
         if (JSON.stringify((await repositoryPreferences()).preferences.repository) !== JSON.stringify(source)) throw new Error('Repository settings changed. Try again.');
-        // Preserve previously loaded other languages if their shared lyrics still match.
-        let candidate = imported;
-        if (previous.project) {
-          const incomingLanguages = new Set(imported.blocks.flatMap(row => Object.keys(row.translations)));
-          const retained = { ...previous.project, translationLanguage: 'en', blocks: previous.project.blocks.map(row => ({ ...row,
-            translations: Object.fromEntries(Object.entries(row.translations).filter(([language]) => !incomingLanguages.has(language))) })) };
-          const merged = KaraokeCore.mergeTranslations(imported, retained);
-          if (!merged.replacement) candidate = merged.project;
-        }
-        data = await projectStore.write(message.videoId, candidate, previous.revision, { automatic: true, source: { ...source, file: entry.file } });
+        data = await projectStore.write(message.videoId, imported, previous.revision, { automatic: true, source: { ...source, file: entry.file } });
         break;
       }
       case "furigana": {

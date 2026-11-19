@@ -14,10 +14,11 @@ function fixture(saved, failSave = false) {
     focus() { this.focused = true; }
     scrollIntoView() {}
     getBoundingClientRect() { return { left: 700, top: 200 }; }
-    fire(type) { this.listeners[type]?.({}); }
+    fire(type, event = {}) { this.listeners[type]?.(event); }
   }
   let data = saved;
-  const context = { module: { exports: {} }, document: { createElement: tag => new Element(tag) }, window: { innerHeight: 900, addEventListener() {} }, MutationObserver: class { observe() {} }, ResizeObserver: class { observe() {} } };
+  const windowListeners = {};
+  const context = { module: { exports: {} }, document: { createElement: tag => new Element(tag) }, window: { innerHeight: 900, addEventListener(type, listener) { windowListeners[type] = listener; } }, MutationObserver: class { observe() {} }, ResizeObserver: class { observe() {} } };
   vm.runInNewContext(fs.readFileSync("src/tutorial.js", "utf8"), context);
   const root = new Element("div"), panel = new Element("section"), trigger = new Element("button"), field = new Element("input");
   panel.append(field);
@@ -25,7 +26,7 @@ function fixture(saved, failSave = false) {
     get: async () => ({ karaokeTutorial: data }),
     set: async value => { if (failSave) throw Error("Storage unavailable"); data = value.karaokeTutorial; }
   }, steps: ["first", "second", "third"].map(id => ({ id, chapter: "Basics", title: id, text: id, target: () => field })) });
-  return { guide, elements, panel, trigger, data: () => data, find: text => elements.find(e => e.textContent === text), card: elements.find(e => e.id === "tutorial") };
+  return { guide, elements, panel, trigger, root, windowListeners, data: () => data, find: text => elements.find(e => e.textContent === text), card: elements.find(e => e.id === "tutorial") };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
 test("tutorial starts once when a video is ready, preserves position on close, and restores after reload", async () => {
@@ -52,4 +53,29 @@ test("unknown saved steps fall back safely and storage failures leave navigation
   assert.equal(f.elements.find(e => e.tagName === "H3").textContent, "first");
   assert.ok(f.elements.some(e => e.textContent?.includes("Could not save")));
   f.find("Next").fire("click"); assert.equal(f.elements.find(e => e.tagName === "H3").textContent, "second");
+});
+test("arrow keys navigate within bounds and Escape closes from editor fields or outside Settings", async () => {
+  const f = fixture(); await f.guide.open();
+  function key(key, options = {}, outside = false) {
+    const event = { key, target: {}, prevented: false, stopped: false,
+      composedPath: () => [], preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...options };
+    if (outside) f.windowListeners.keydown(event); else f.root.fire("keydown", event);
+    return event;
+  }
+  const title = () => f.elements.find(e => e.tagName === "H3").textContent;
+  key("ArrowLeft"); assert.equal(title(), "first");
+  assert.equal(key("ArrowRight").prevented, true); assert.equal(title(), "second");
+  key("ArrowRight", {}, true); assert.equal(title(), "third");
+  key("ArrowRight"); assert.equal(title(), "third"); assert.equal(f.card.hidden, false);
+  key("ArrowLeft"); assert.equal(title(), "second");
+  const editing = { composedPath: () => [{ matches: () => true }] };
+  assert.equal(key("ArrowRight", editing).prevented, false); assert.equal(title(), "second");
+  assert.equal(key("ArrowLeft", { altKey: true }).prevented, false);
+  assert.equal(key("ArrowLeft", { isComposing: true }).prevented, false);
+  assert.equal(key("Escape", editing).stopped, true); assert.equal(f.card.hidden, true);
+  assert.equal(f.trigger.focused, true);
+  assert.equal(key("ArrowRight").prevented, false);
+  await f.guide.open(); key("Escape", {}, true); assert.equal(f.card.hidden, true);
+  await f.guide.open(); f.panel.hidden = true;
+  assert.equal(key("ArrowRight").prevented, false);
 });

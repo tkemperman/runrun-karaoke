@@ -1,6 +1,28 @@
 # Changelog
 
+## 1.4.4 — Released 2026-11-13
+
+- Place red Remove key buttons beside saved key fields and confirm credential removal. Keep Clear audio file neutral and immediate.
+- Reuse validated per-video temporary audio for repeated AudioShake timing; add Clear audio file to remove the current cached download. Update helper and privacy documentation.
+- Skip translation for lines already in the target language, and trim saved lyric/translation edges while preserving furigana and internal whitespace.
+- Simplify Find lyrics to catalog or search choices, with search results shown only after searching. Move Clear all lines to the Line editor toolbar, hide it when empty, and keep its confirmation.
+- Simplify developer GitHub controls to publication and confirmed deletion; show deletion only for a saved catalog match and keep cancellation silent.
+- Keep one local translation per song. Changing Translation language code preserves its text until translation is regenerated; remove Add language and Saved translations. Importing or loading another language replaces the current translation after confirmation. Legacy multilingual projects use their selected language.
+- Publish only the current translation to its own language file, preserving other GitHub language files such as en.json, fr.json and nl.json.
+- Update the 20-step tutorial for current catalog/search controls, single-translation editing and audio cache reuse. Remove the Clear all lines tutorial step, keep catalog choices visible below the pinned header, and add left/right navigation and Escape to close. Editing fields retain normal arrow-key behavior.
+
+- Validation: 172 JavaScript tests, 17 Python tests and syntax checks pass. Walked through the tutorial in Firefox, inspected all steps, verified left/right navigation and Escape, and rechecked the corrected catalog highlight and final 20-step count. The deeper tutorial review remains on the TODO list. Live AI requests and authenticated GitHub writes were not performed for this change.
+- Rebuilt and verified the unsigned 1.4.4 and 1.4.4-local distribution archives, including exact runtime files, privacy policy and Linux helper contents. No upload or publication performed.
+
+## 1.4.3 — Released 2026-11-12
+
+- Bump the version after the duplicate private 1.4.2 upload was deleted; use 1.4.3 for the replacement upload because the deleted version number cannot be reused.
+- Keep the functionality, project schema and privacy policy from 1.4.2 unchanged. Update manifest/package metadata, current-version documentation and packaging instructions.
+- Validation: the unchanged runtime retains the 152 JavaScript and 9 Python tests passed for 1.4.2. Built and verified `dist/runrun-karaoke-1.4.3.zip` and `dist/runrun-karaoke-1.4.3-local.zip`: version metadata, ZIP integrity and bundled runtime, privacy policy and native helper match the source. These packages are unsigned and have not been uploaded.
+
 ## 1.4.2 — Released 2026-11-12
+
+The duplicate private upload was deleted. This version is superseded by 1.4.3 and must not be uploaded again.
 
 - Allow editing the current translation language code while preserving its text; reject language collisions and show a separate selector only for multiple saved translations. AI translations retain their chosen target language.
 - Store multiple translation languages per video with separate original-language metadata, shared lyrics/timing and schema 4 display settings. Line editor and AI share a language selection, initially English and then the last manually chosen language. JSON preserves every language and merges compatible imports with overwrite confirmation; schemas 1–3 remain importable.
@@ -11,7 +33,7 @@
 - Detect the original language in AI translation and offer saved, default-on Japanese romaji conversion without rewriting non-Japanese lyrics. Correct original-language metadata in existing local and GitHub projects, including Serbian lyrics previously marked as Japanese; preserve translation languages, text and timing.
 - Expand and shorten the tutorial to 21 steps covering catalog choices, languages, audio recognition versus alignment, imports/exports and local deletion. Update the README, repository template, privacy policy and development guidance. Audio-based furigana correction remains a TODO; no such feature is included in this release.
 - Validation: 152 JavaScript tests, 9 Python tests and JavaScript/Python/shell syntax checks pass. Earlier browser checks covered automatic catalog loading, multilingual imports and local deletion; the catalog metadata update's GitHub Action passed. Live extension-driven publication and remote deletion remain unverified.
-- Built and verified `dist/runrun-karaoke-1.4.2.zip` and `dist/runrun-karaoke-1.4.2-local.zip`, including version metadata, ZIP integrity, exact runtime/privacy files and the native helper. Packages are unsigned and have not been published.
+- Built and verified `dist/runrun-karaoke-1.4.2.zip` and `dist/runrun-karaoke-1.4.2-local.zip`, including version metadata, ZIP integrity, exact runtime/privacy files and the native helper. The local archives are unsigned; the subsequent private upload was deleted.
 
 ## 1.4.1 — Released 2026-11-12
 

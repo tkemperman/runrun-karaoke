@@ -34,6 +34,14 @@ test('recognition creates new lines without inheriting translations or furigana'
   assert.deepEqual(result.project.blocks[0].translations,{});
   assert.equal(result.project.originalLanguage,'ja');
 });
+test('AudioShake recognition trims surrounding line breaks before preview and storage', () => {
+  const payload={language:'ja',lines:[line(' \r\n海  へ\n進め\n\n',1,3)]};
+  const before=structuredClone(payload);
+  const result=T.preview(project(['Old']),payload,5,false);
+  assert.equal(result.project.blocks[0].text,'海  へ\n進め');
+  assert.equal(result.project.blocks[0].start,1);assert.equal(result.project.blocks[0].end,3);
+  assert.deepEqual(payload,before);
+});
 test('invalid durations, reversed times, invalid ends and out-of-order results fail atomically', () => {
   for (const seconds of [NaN,Infinity,0,-1,2701]) assert.throws(()=>T.duration(seconds));
   for (const lines of [[line('a',-1)], [line('a',2,1)], [line('a',1,11)], [line('a',4),line('b',1)], [line('a',0,9),line('b',2,3)], [{text:'a',start:'1',end:2}],[]]) assert.throws(()=>T.preview(project(['a']),{lines},10,true));

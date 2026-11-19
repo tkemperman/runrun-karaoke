@@ -14,7 +14,7 @@ spec.loader.exec_module(H)
 
 class HelperTests(unittest.TestCase):
     def request(self, **patches):
-        return dict(type="start", requestId="12345678-1234-1234-1234-123456789abc", videoId="F-iI4-BkwXg", duration=50, apiKey="secret", language="auto", **patches)
+        return dict(type="start", requestId="12345678-1234-1234-1234-123456789abc", videoId="F-iI4-BkwXg", duration=50, apiKey="secret", language="auto") | patches
 
     def test_protocol_and_validation(self):
         value=self.request(); data=json.dumps(value).encode()
@@ -59,7 +59,7 @@ class HelperTests(unittest.TestCase):
     def test_submission_with_and_without_transcript_and_temp_cleanup(self):
         for transcript in [None,'朝\n朝']:
             with tempfile.TemporaryDirectory() as state:
-                events=[];worker=H.Worker(self.request(transcript=transcript),events.append,state)
+                events=[];worker=H.Worker(self.request(transcript=transcript),events.append,state,Path(state)/'cache')
                 paths=[];payloads=[]
                 def download(folder):
                     path=folder/'audio.mp3';path.write_bytes(b'audio');paths.append(path);return path
@@ -76,12 +76,114 @@ class HelperTests(unittest.TestCase):
                 self.assertEqual('transcriptAssetId' in target,transcript is not None)
                 self.assertFalse(paths[0].exists());self.assertEqual(json.loads(worker.receipt.read_text())['taskId'],'task-1')
                 self.assertNotIn('secret',worker.receipt.read_text())
+                cached=worker.cached_audio_path()
+                self.assertEqual(cached.read_bytes(),b'audio')
+                self.assertEqual(cached.stat().st_mode & 0o777,0o600)
+                self.assertEqual(worker.cache_dir.stat().st_mode & 0o777,0o700)
+
+    def test_retiming_reuses_audio_across_workers_and_uploads_current_lyrics(self):
+        with tempfile.TemporaryDirectory() as state:
+            cache=Path(state)/'cache'
+            uploads=[];events=[]
+            def download(folder):
+                audio=folder/'audio.mp3';audio.write_bytes(b'complete track');return audio
+            def upload(path,mime):
+                uploads.append((path,path.read_bytes()));return path.name
+            with patch.object(H,'status',return_value={'ready':True}),patch.object(H.Worker,'download',side_effect=download) as fetch,patch.object(H.Worker,'run_command',return_value='50') as probe,patch.object(H.Worker,'upload',side_effect=upload),patch.object(H.Worker,'api',return_value={'id':'task-1'}) as api:
+                for i,lyrics in enumerate(['Intro\nVerse','Verse']):
+                    worker=H.Worker(self.request(requestId=f'{i:08d}-1234-1234-1234-123456789abc',transcript=lyrics),events.append,state,cache)
+                    worker.submit()
+                self.assertEqual(fetch.call_count,1)
+                self.assertEqual(probe.call_count,1)
+                self.assertEqual(probe.call_args.args[0][0],'ffprobe')
+                self.assertEqual(api.call_count,2)
+            self.assertEqual([data for _,data in uploads],[b'complete track',b'Intro\nVerse',b'complete track',b'Verse'])
+            self.assertTrue(all(not path.exists() for path,_ in uploads))
+            self.assertEqual([p.name for p in cache.iterdir()],['F-iI4-BkwXg.mp3'])
+            self.assertIn('reusing downloaded audio',[event.get('stage') for event in events])
+
+    def test_missing_corrupt_and_wrong_duration_cache_download_again(self):
+        for case in ['missing','empty','corrupt','wrong-duration','nan','different-video']:
+            with self.subTest(case=case),tempfile.TemporaryDirectory() as state,tempfile.TemporaryDirectory() as job:
+                worker=H.Worker(self.request(),lambda _:None,state,Path(state)/'cache')
+                cached=worker.cached_audio_path()
+                if case!='missing':
+                    path=cached if case!='different-video' else cached.with_name('abcdefghijk.mp3')
+                    path.write_bytes(b'' if case=='empty' else b'old audio')
+                def download(folder):
+                    self.assertFalse((folder/'audio.mp3').exists())
+                    audio=folder/'audio.mp3';audio.write_bytes(b'new audio');return audio
+                with patch.object(worker,'download',side_effect=download) as fetch,patch.object(worker,'run_command',return_value='100' if case=='wrong-duration' else 'nan',side_effect=RuntimeError('bad audio') if case=='corrupt' else None):
+                    audio=worker.prepare_audio(Path(job))
+                fetch.assert_called_once()
+                self.assertEqual(audio.read_bytes(),b'new audio')
+                self.assertEqual(cached.read_bytes(),b'new audio')
+
+    def test_failed_or_cancelled_download_is_not_cached(self):
+        for error in [RuntimeError('download failed'),H.Cancelled()]:
+            with tempfile.TemporaryDirectory() as state,tempfile.TemporaryDirectory() as job:
+                worker=H.Worker(self.request(),lambda _:None,state,Path(state)/'cache')
+                def download(folder):
+                    (folder/'audio.mp3').write_bytes(b'partial')
+                    raise error
+                with patch.object(worker,'download',side_effect=download):
+                    with self.assertRaises(type(error)):worker.prepare_audio(Path(job))
+                self.assertFalse(worker.cached_audio_path().exists())
+
+    def test_cancel_during_cache_validation_does_not_download(self):
+        with tempfile.TemporaryDirectory() as state,tempfile.TemporaryDirectory() as job:
+            worker=H.Worker(self.request(),lambda _:None,state,Path(state)/'cache')
+            worker.cached_audio_path().write_bytes(b'cached audio')
+            with patch.object(worker,'run_command',side_effect=H.Cancelled),patch.object(worker,'download') as fetch:
+                with self.assertRaises(H.Cancelled):worker.prepare_audio(Path(job))
+                fetch.assert_not_called()
+
+    def test_cache_write_failure_still_allows_upload(self):
+        with tempfile.TemporaryDirectory() as state,tempfile.TemporaryDirectory() as job:
+            worker=H.Worker(self.request(),lambda _:None,state,Path(state)/'cache')
+            def download(folder):
+                audio=folder/'audio.mp3';audio.write_bytes(b'complete');return audio
+            with patch.object(worker,'download',side_effect=download),patch.object(H.shutil,'copyfile',side_effect=OSError('disk full')):
+                audio=worker.prepare_audio(Path(job))
+            self.assertEqual(audio.read_bytes(),b'complete')
+            self.assertEqual(list(worker.cache_dir.iterdir()),[])
 
     def test_cancel_stops_before_api(self):
         events=[];worker=H.Worker(self.request(),events.append)
         worker.cancelled.set()
         with patch.object(worker,'submit',side_effect=H.Cancelled):worker.run()
         self.assertEqual(events[-1]['type'],'cancelled')
+
+    def test_clear_audio_removes_only_selected_video_and_handles_absent_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache=Path(folder)/'cache'
+            self.assertFalse(H.clear_audio_cache('F-iI4-BkwXg',cache))
+            self.assertFalse(cache.exists())
+            selected=H.audio_cache_path('F-iI4-BkwXg',cache);selected.write_bytes(b'audio')
+            other=H.audio_cache_path('abcdefghijk',cache);other.write_bytes(b'other audio')
+            receipt=Path(folder)/'receipt.json';receipt.write_text('{"taskId":"saved"}')
+            for video_id in ['../bad',None,'../abcdefgh','',123]:
+                with self.assertRaises(ValueError):H.clear_audio_cache(video_id,cache)
+            self.assertTrue(selected.exists())
+            self.assertTrue(H.clear_audio_cache('F-iI4-BkwXg',cache))
+            self.assertFalse(H.clear_audio_cache('F-iI4-BkwXg',cache))
+            self.assertEqual(other.read_bytes(),b'other audio')
+            self.assertEqual(receipt.read_text(),'{"taskId":"saved"}')
+
+    def test_clear_audio_rejects_symlinked_cache_directory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'target';target.mkdir(mode=0o700)
+            audio=target/'F-iI4-BkwXg.mp3';audio.write_bytes(b'keep')
+            cache=Path(folder)/'cache';cache.symlink_to(target,target_is_directory=True)
+            with self.assertRaises(OSError):H.clear_audio_cache('F-iI4-BkwXg',cache)
+            self.assertEqual(audio.read_bytes(),b'keep')
+
+    def test_clear_audio_protocol_needs_no_credentials_or_dependencies(self):
+        events=[]
+        with patch.object(H,'read_message',side_effect=[{'type':'clear-audio-cache','videoId':'F-iI4-BkwXg'},None]),patch.object(H,'send',side_effect=events.append),patch.object(H,'clear_audio_cache',return_value=True) as clear,patch.object(H,'status') as status,patch.object(H,'Worker') as worker:
+            H.main()
+        clear.assert_called_once_with('F-iI4-BkwXg');status.assert_not_called();worker.assert_not_called()
+        self.assertEqual(events,[{'type':'audio-cache-cleared','removed':True}])
 
     def test_install_prefers_pacman_and_checks_all_packages(self):
         with tempfile.TemporaryDirectory() as folder:

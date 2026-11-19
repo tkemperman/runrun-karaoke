@@ -15,12 +15,19 @@
   function languages(value) {
     return [...new Set([value.translationLanguage, ...value.blocks.flatMap(row => Object.keys(row.translations))])].sort();
   }
+  function singleTranslation(value) {
+    const p = validate(value);
+    for (const row of p.blocks) {
+      row.translations = Object.hasOwn(row.translations, p.translationLanguage)
+        ? { [p.translationLanguage]: row.translations[p.translationLanguage] } : {};
+    }
+    return p;
+  }
   function renameTranslationLanguage(value, language) {
     if (typeof language !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language.trim())) throw new Error('Enter a language code such as en, nl or pt-BR.');
     language = language.trim();
-    const p = validate(value), previous = p.translationLanguage;
+    const p = singleTranslation(value), previous = p.translationLanguage;
     if (language === previous) return p;
-    if (p.blocks.some(row => Object.hasOwn(row.translations, language))) throw new Error(`A ${language} translation already exists. Select it from Saved translations instead.`);
     for (const row of p.blocks) {
       if (Object.hasOwn(row.translations, previous)) {
         row.translations[language] = row.translations[previous];
@@ -32,6 +39,20 @@
   }
   function exportProject(value) {
     const p = validate(value);
+    // Normalize the saved copy without disrupting text currently being edited.
+    for (const row of p.blocks) {
+      const start = row.text.length - row.text.trimStart().length, end = row.text.trimEnd().length;
+      if (row.furigana && (start || end !== row.text.length)) {
+        let offset = 0;
+        row.furigana = row.furigana.flatMap(([text, reading]) => {
+          const trimmed = text.slice(Math.max(0, start - offset), Math.max(0, end - offset));
+          offset += text.length;
+          return trimmed ? [[trimmed, reading]] : [];
+        });
+      }
+      row.text = row.text.trim();
+      row.translations = Object.fromEntries(Object.entries(row.translations).map(([language, text]) => [language, text.trim()]));
+    }
     return { schemaVersion: p.schemaVersion, videoId: p.videoId, videoUrl: p.videoUrl, videoTitle: p.videoTitle,
       title: p.title, artist: p.artist, originalLanguage: p.originalLanguage, translationLanguage: p.translationLanguage,
       offset: p.offset, furiganaEnabled: p.furiganaEnabled, display: p.display, source: p.source,
@@ -40,11 +61,10 @@
   }
   function fingerprint(value) {
     const p = exportProject(value);
-    delete p.translationLanguage;
     return JSON.stringify(p);
   }
   function mergeTranslations(current, incoming) {
-    const a = validate(current), b = validate(incoming);
+    const a = singleTranslation(current), b = singleTranslation(incoming);
     if (!a.blocks.length) return { project: b, conflicts: [], replacement: false };
     if (a.videoId !== b.videoId || a.blocks.length !== b.blocks.length ||
         (a.originalLanguage !== 'und' && b.originalLanguage !== 'und' && a.originalLanguage !== b.originalLanguage)) {
@@ -58,10 +78,10 @@
     }
     const conflicts = new Set();
     a.blocks.forEach((row, i) => {
-      for (const [language, text] of Object.entries(matched[i].translations)) {
-        if (row.translations[language]?.trim() && row.translations[language] !== text) conflicts.add(language);
-        row.translations[language] = text;
-      }
+      const previous = row.translations[a.translationLanguage] || '';
+      const incoming = matched[i].translations[b.translationLanguage] || '';
+      if (previous.trim() && (a.translationLanguage !== b.translationLanguage || previous !== incoming)) conflicts.add(a.translationLanguage);
+      row.translations = { ...matched[i].translations };
     });
     a.translationLanguage = b.translationLanguage;
     if (a.originalLanguage === 'und') a.originalLanguage = b.originalLanguage;
@@ -188,7 +208,7 @@
     return rows;
   }
   function exportLrc(value, timed = true) {
-    const project = validate(value);
+    const project = exportProject(value);
     if (!project.blocks.length) throw new Error("Add lyrics first.");
     const text = row => row.text.replace(/[\r\n]+/g, " ");
     if (!timed) return project.blocks.map(text).join("\n") + "\n";
@@ -264,7 +284,7 @@
     try { validate(value); }
     catch (error) { row.start = previousStart; value.offset = previousOffset; throw error; }
   }
-  const api = { displayDefaults, languages, renameTranslationLanguage, exportProject, fingerprint, mergeTranslations, replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, importLyrics, exportLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
+  const api = { displayDefaults, languages, singleTranslation, renameTranslationLanguage, exportProject, fingerprint, mergeTranslations, replaceFuriganaTerm, validateFurigana, alignKana, block, project, validate, parseLrc, importLyrics, exportLrc, activeBlock, stamp, matchTranslation, moveLineStart, syncLine };
   root.KaraokeCore = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

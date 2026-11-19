@@ -50,6 +50,7 @@ const KaraokeTutorial = (() => {
     const navigation = node("nav", "", card, { "aria-label": "Tutorial navigation" });
     const previous = node("button", "Previous", navigation, { type: "button" });
     const next = node("button", "Next", navigation, { type: "button" });
+    node("p", "← / → Previous / Next · Esc Close", card, { class: "muted" });
     const arrow = node("div", "", root, { id: "tutorial-arrow", "aria-hidden": "true" });
     arrow.hidden = true;
     const arrowOutline = node("div", "", arrow, { class: "outline" });
@@ -152,9 +153,24 @@ const KaraokeTutorial = (() => {
     previous.addEventListener("click", () => { if (index > 0) { index--; show(); } });
     next.addEventListener("click", () => { if (index === steps.length - 1) close(); else { index++; show(); } });
     jump.addEventListener("change", () => { index = Number(jump.value); show(); });
-    root.addEventListener("keydown", event => {
-      if (active && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
-    });
+    function onKeyDown(event) {
+      if (!active || panel.hidden || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+      const escape = event.key === "Escape";
+      if (!escape && event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      // Preserve caret movement and selection while editing the song or chapter menu.
+      if (!escape && event.composedPath().some(element => element.matches?.("input, textarea, select, [contenteditable]:not([contenteditable=false])"))) return;
+      event.preventDefault(); event.stopPropagation();
+      if (escape) close();
+      else {
+        const destination = Math.max(0, Math.min(steps.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)));
+        if (destination !== index) { index = destination; show(); }
+      }
+    }
+    // Capture inside the shadow root before the editor stops key events bubbling.
+    root.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keydown", event => {
+      if (event.target !== root.host) onKeyDown(event);
+    }, true);
     panel.addEventListener("scroll", place, { passive: true });
     window.addEventListener("resize", place);
     // Rows can be rebuilt after edits; resolve targets again without moving focus.
