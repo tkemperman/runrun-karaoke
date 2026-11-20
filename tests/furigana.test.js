@@ -26,7 +26,7 @@ test('legacy schema migration is non-mutating and idempotent', () => {
   assert.deepEqual(C.validate(migrated), migrated);
 });
 
-test('imports reject mismatched, malformed, oversized and non-kana annotations', () => {
+test('imports reject mismatched, malformed, oversized and unsupported annotations', () => {
   const p = C.project('abcdefghijk'); p.blocks.push(C.block('今日'));
   for (const parts of [null, {}, [['昨日', 'きのう']], [['今日', '<img>']], [['今日', '']], [['今日', 7]], [['', null], ['今日', 'きょう']], [['今日', 'あ'.repeat(1001)]], [['今日', 'きょう', 'extra']]]) {
     p.blocks[0].furigana = parts;
@@ -36,6 +36,20 @@ test('imports reject mismatched, malformed, oversized and non-kana annotations',
   p.furiganaEnabled = 'yes'; assert.throws(() => C.validate(p), /visibility/);
   p.furiganaEnabled = true; p.blocks[0].start = NaN;
   assert.throws(() => C.validate(p), /Times/);
+});
+
+test('manual kanji above sung kana survives project export and renders as reverse ruby', () => {
+  const p = C.project('abcdefghijk');
+  const row = C.block('ドーマン セーマン', 1.25, 3.5);
+  row.furigana = [['ドーマン', '道満'], [' ', null], ['セーマン', '晴明']];
+  row.translations.en = 'Doman! Seiman!';
+  p.blocks.push(row); p.furiganaEnabled = true;
+  assert.deepEqual(C.validate(JSON.parse(JSON.stringify(C.exportProject(p)))), p);
+  assert.deepEqual(C.alignKana('ドーマン', '道満'), { prefix: '', base: 'ドーマン', annotation: '道満', suffix: '' });
+  assert.deepEqual(C.alignKana('セーマン', '晴明'), { prefix: '', base: 'セーマン', annotation: '晴明', suffix: '' });
+  for (const [base, annotation] of [['道満', '道満'], ['Doman', '道満'], [' ', '道満'], ['ドーマン', '<b>道満</b>']]) {
+    assert.throws(() => C.validateFurigana(base, [[base, annotation]]), /furigana/);
+  }
 });
 
 test('Furikazan matcher retains longest words, particles and conservative greeting exceptions', () => {

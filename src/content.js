@@ -10,17 +10,18 @@
     :host { all: initial; font: 14px/1.45 system-ui, sans-serif; color: #eef2ff; }
     * { box-sizing: border-box; } [hidden] { display: none !important; }
     button, input, textarea, select { font: inherit; }
-    button { cursor: pointer; border: 1px solid #526078; border-radius: 7px; padding: 7px 11px; background: #28354b; color: #fff; }
+    button, a.button-link { cursor: pointer; border: 1px solid #526078; border-radius: 7px; padding: 7px 11px; background: #28354b; color: #fff; }
+    a.button-link { display: inline-flex; align-items: center; text-decoration: none; }
     details > button + button { margin-inline-start: 8px; }
-    button:hover { background: #3c4d69; } button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    button:hover, a.button-link:hover { background: #3c4d69; } button:focus-visible, a.button-link:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
     .key-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .key-row input { flex: 1; width: 0; }
     .key-row button { flex: 0 0 auto; }
     button.danger { background: #b91c1c; border-color: #f87171; }
     button.danger:hover { background: #991b1b; }
-    a.primary-button { display: inline-flex; align-items: center; border: 1px solid #60a5fa; border-radius: 7px; padding: 7px 11px; background: #2563eb; color: #fff; text-decoration: none; }
-    a.primary-button:hover { background: #1d4ed8; }
-    a.primary-button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    a.primary-button, button.primary-button { display: inline-flex; align-items: center; border: 1px solid #60a5fa; border-radius: 7px; padding: 7px 11px; background: #2563eb; color: #fff; text-decoration: none; }
+    a.primary-button:hover, button.primary-button:hover { background: #1d4ed8; }
+    a.primary-button:focus-visible, button.primary-button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
     button:disabled { cursor: wait; opacity: .65; }
     button[aria-busy=true]::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: 8px; vertical-align: -.15em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: translation-spin .75s linear infinite; }
     @keyframes translation-spin { to { transform: rotate(360deg); } }
@@ -28,7 +29,11 @@
     textarea { width: 100%; min-height: 65px; resize: vertical; } input[type=number] { width: 90px; }
     label { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; } a { color: #82e5f0; }
     label.checkbox-row { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
-    .sync-row { margin: 8px 0; } .sync-row input { width: 100px; }
+    .sync-row { margin: 8px 0; }
+    .start-at-field { position: relative; flex: 0 0 132px; }
+    .start-at-field input { width: 100%; padding-right: 32px; }
+    .start-at-reset { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; padding: 0; border: 0; background: transparent; font-size: 20px; line-height: 1; }
+    .start-at-reset:disabled { cursor: default; }
     .checkbox-row input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #67e8f9; cursor: pointer; }
     #panel { position: fixed; right: 16px; top: 70px; width: min(550px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow: auto; z-index: 2147483647; background: #182235; border: 1px solid #526078; border-radius: 12px; padding: 12px 16px 16px; box-shadow: 0 12px 40px #0009; }
     #panel.privacy-open, #panel.about-open { display:flex; flex-direction:column; height:calc(100vh - 140px); overflow:hidden; }
@@ -246,9 +251,6 @@
     if (!project || storageState.deleting) return;
     updateFuriganaButton();
     updateTimingFields();
-    const hasText = project.blocks.some(row => row.text.trim());
-    if (hasText !== timingHadText) useExisting.checked = hasText;
-    timingHadText = hasText;
     updateTimingControls();
     let snapshot;
     project.videoTitle = currentVideoTitle() || project.videoTitle;
@@ -279,30 +281,31 @@
   }
   el("label", "Start at", display, { for: "lyrics-start-at" });
   const syncRow = el("div", null, display, { class: "row sync-row" });
-  const startAt = el("input", null, syncRow, { id: "lyrics-start-at", type: "text" });
-  el("span", "or", syncRow);
-  startAt.placeholder = "0:32.250";
+  const startAtField = el("div", null, syncRow, { class: "start-at-field" });
+  const startAt = el("input", null, startAtField, { id: "lyrics-start-at", type: "text" });
   startAt.addEventListener("change", () => {
     try {
       requireProject();
-      const first = firstTimedLyric() || project.blocks.find(row => row.text.trim());
-      if (!first) throw new Error("Load lyrics or add a lyric line first.");
       const match = startAt.value.trim().match(/^(-?)(\d+):([0-5]\d)(?:\.(\d{1,3}))?$/);
       if (!match) throw new Error("Use minutes:seconds for Start at, for example 0:33 or 1:05.5.");
       const seconds = (Number(match[2]) * 60 + Number(match[3]) + Number(`0.${match[4] || 0}`)) * (match[1] ? -1 : 1);
-      if (first.start !== null && seconds !== first.start + project.offset && !confirmShift()) { updateTimingFields(); return; }
-      C.syncLine(project, first, seconds);
-      renderRows();
-      save();
+      applyStartAt(seconds);
     } catch (error) { updateTimingFields(); fail(error); }
   });
-  function confirmShift() { return window.confirm('Shift the timing of the following lyrics as well?'); }
-  button('Reset Start at', syncRow, () => {
+  function applyStartAt(seconds) {
     requireProject();
-    if (!project.offset) return;
-    if (!confirmShift()) return;
-    project.offset = 0; renderRows(); save();
-  });
+    const first = firstTimedLyric() || project.blocks.find(row => row.text.trim());
+    if (!first) throw new Error("Load lyrics or add a lyric line first.");
+    if (first.start !== null && seconds !== first.start + project.offset && !confirmShift()) { updateTimingFields(); return; }
+    C.syncLine(project, first, seconds);
+    renderRows();
+    save();
+  }
+  function confirmShift() { return window.confirm('Shift the timing of the following lyrics as well?'); }
+  const resetStartAt = button('×', startAtField, () => applyStartAt(0));
+  resetStartAt.className = "start-at-reset";
+  resetStartAt.setAttribute("aria-label", "Set Start at to 0:00");
+  resetStartAt.title = "Set Start at to 0:00";
   function firstTimedLyric() {
     return project?.blocks.filter(row => row.start !== null && row.text.trim()).reduce((first, row) => !first || row.start < first.start ? row : first, null);
   }
@@ -314,6 +317,7 @@
       : untimedMessage;
     const first = firstTimedLyric();
     startAt.disabled = !project;
+    resetStartAt.disabled = !project?.blocks.some(row => row.text.trim());
     if (!first) { startAt.value = ""; return; }
     startAt.value = formatTime(first.start + project.offset);
   }
@@ -337,8 +341,10 @@
     if (!row) throw new Error("Select a line in the Line editor first.");
     const media = video();
     if (!media || document.querySelector("#movie_player.ad-showing")) throw new Error("Wait for the main video (not an advertisement).");
-    if (row.start !== null && media.currentTime !== row.start + project.offset && !confirmShift()) return;
-    C.syncLine(project, row, media.currentTime);
+    // Playback can advance while the confirmation dialog is open.
+    const seconds = media.currentTime;
+    if (row.start !== null && seconds !== row.start + project.offset && !confirmShift()) return;
+    C.syncLine(project, row, seconds);
     renderRows();
     save();
   }).title = "Sync selected line to current video position";
@@ -540,7 +546,7 @@
           const imported = C.validate(await request({ type: 'catalog-load', videoId: requestedId, file: entry.file, source: entry.source, language: entry.translationLanguage }));
           if (generation !== token || lyricsSource !== 'catalog') return;
           if (JSON.stringify(project) !== snapshot) throw new Error('Project changed while downloading. Load again to review replacement.');
-          if (await acceptProject(imported)) notify('Catalog translation loaded. Other compatible translation languages kept.');
+          if (await acceptProject(imported, true)) notify('Catalog lyrics, translation and timing loaded.');
         } finally { if (generation === token) { catalogLoading = false; updateLyricsSource(); } }
       });
       catalogLoad = load; catalogLanguageChoice = languageChoice; updateLyricsSource();
@@ -548,9 +554,20 @@
   }
 
   function updatePublicationState() {
-    const published = catalogKnown && !!project && availableCatalog.some(e => e.videoId === videoId && e.translationLanguage === project.translationLanguage);
+    const entry = catalogKnown && project && availableCatalog.find(e => e.videoId === videoId && e.translationLanguage === project.translationLanguage);
+    const published = !!entry;
     deleteRemote.hidden = !published;
+    updateTranslationLink(entry);
     if (catalogKnown && !repositorySection.hidden) repositorySection.open = !published;
+  }
+  function updateTranslationLink(entry) {
+    openTranslation.hidden = !entry?.source?.repo || !entry.source.branch || !entry.file;
+    openTranslation.removeAttribute('href');
+    if (!openTranslation.hidden) {
+      const repo = entry.source.repo.split('/').map(encodeURIComponent).join('/');
+      const file = entry.file.split('/').map(encodeURIComponent).join('/');
+      openTranslation.href = `https://github.com/${repo}/blob/${encodeURIComponent(entry.source.branch)}/${file}`;
+    }
   }
   el('p', 'Search by song or artist. Choose a recording from the results.', lyricsSearchPanel, { class: 'muted' });
   el('label', 'Song or artist', lyricsSearchPanel, { for: 'lyrics-query' });
@@ -828,12 +845,9 @@
   }
   audioKey.addEventListener("change", () => saveAudioPreferences().catch(fail));
   audioLanguage.addEventListener("change", () => saveAudioPreferences().catch(fail));
-  const existingLabel = el("label", null, automatic, { class: "checkbox-row" });
-  const useExisting = el("input", null, existingLabel, { type: "checkbox" });
-  el("span", "Use existing lyrics", existingLabel);
-  el("p", "Generate timed lyrics uses this complete video’s audio, reusing a temporary download when available, and uploads it to AudioShake along with the current lyrics when selected. Otherwise AudioShake recognizes the lyrics. Use existing lyrics also recalculates existing timing for live performances or covers, preserving text, translations and furigana. AudioShake charges apply. Up to 45 minutes; no livestreams. When timing finishes, review the preview before Apply. Cancel stops local work; a submitted server task may continue.", automatic, { class: "muted" });
-  let timingHadText = false;
+  el("p", "Generate timed lyrics uses this complete video’s audio, reusing a temporary download when available, and uploads it to AudioShake along with any existing lyrics. Existing lyrics are automatically aligned to the recording, preserving text, translations and furigana. Without existing lyrics, AudioShake recognizes the lyrics. AudioShake charges apply. Up to 45 minutes; no livestreams. When timing finishes, review the preview before Apply. Cancel stops local work; a submitted server task may continue.", automatic, { class: "muted" });
   let helperReady = false, helperAvailable = false, timingJob = null, timingBusy = false, timingPollBusy = false, clearingAudio = false;
+  let audioCacheExists = false, audioCacheCheck = 0;
   const timingStatus = el("p", "", automatic, { role: "status" });
   const timingPreview = el("div", null, automatic, { style: "max-height:240px;overflow:auto" });
   let shownTimingResult = null;
@@ -849,7 +863,7 @@
     try {
       await audioReady; await saveAudioPreferences();
       if (target !== project || token !== generation || fingerprint !== KaraokeTiming.fingerprint(project)) throw new Error("Project changed. Start timing again.");
-      const job = await request({ type: "timing-start", videoId, project, duration: seconds, useExisting: useExisting.checked });
+      const job = await request({ type: "timing-start", videoId, project, duration: seconds, useExisting: project.blocks.some(row => row.text.trim()) });
       if (token === generation) { timingJob = job; showTimingJob(); }
     } finally { timingBusy = false; updateTimingControls(); }
   }
@@ -886,18 +900,33 @@
   const clearAudio = button("Clear audio file", timingActions, async () => {
     if (clearAudio.disabled) return;
     const token = generation, requestedId = videoId;
+    audioCacheCheck++;
     clearingAudio = true; updateTimingControls();
     audioCacheStatus.textContent = "Removing audio file…";
     try {
       const result = await request({ type: "timing-clear-audio", videoId: requestedId });
       if (token !== generation) return;
+      audioCacheExists = false;
       audioCacheStatus.textContent = result.removed ? "Audio file removed. The next timing request will download it again." : "No downloaded audio file is stored for this video.";
     } catch (error) {
       if (token === generation) audioCacheStatus.textContent = error.message;
-    } finally { clearingAudio = false; updateTimingControls(); }
+    } finally { clearingAudio = false; updateTimingControls(); void refreshAudioCache(); }
   });
   const audioCacheStatus = el("p", "", automatic, { class: "muted", role: "status" });
   let audioCacheVideoId = null;
+  async function refreshAudioCache() {
+    if (!helperAvailable || !videoId || clearingAudio) return;
+    const token = generation, check = ++audioCacheCheck, requestedId = videoId;
+    try {
+      const state = await request({ type: 'timing-audio-status', videoId: requestedId });
+      if (token !== generation || check !== audioCacheCheck) return;
+      audioCacheExists = state.exists;
+    } catch (error) {
+      if (token !== generation || check !== audioCacheCheck) return;
+      audioCacheExists = false; audioCacheStatus.textContent = error.message;
+    }
+    updateTimingControls();
+  }
   function updateTimingControls() {
     timingStart.disabled = !helperReady || timingBusy || clearingAudio || !!timingJob;
     timingResume.hidden = !timingJob || !["interrupted", "cancelled"].includes(timingJob.status);
@@ -905,10 +934,10 @@
     timingCancel.hidden = !timingJob || timingJob.status !== "running";
     timingApply.hidden = !timingJob || timingJob.status !== "ready";
     timingDiscard.hidden = !timingJob || timingJob.status === "running";
-    clearAudio.disabled = !helperAvailable || !videoId || timingBusy || clearingAudio || timingJob?.status === "running";
+    clearAudio.disabled = !audioCacheExists || !helperAvailable || !videoId || timingBusy || clearingAudio || timingJob?.status === "running";
   }
   function showTimingJob() {
-    if (audioCacheVideoId !== videoId) { audioCacheVideoId = videoId; audioCacheStatus.textContent = ""; }
+    if (audioCacheVideoId !== videoId) { audioCacheVideoId = videoId; audioCacheExists = false; audioCacheCheck++; audioCacheStatus.textContent = ""; }
     updateTimingControls();
     if (!timingJob) { timingStatus.textContent = ""; timingPreview.replaceChildren(); shownTimingResult = null; return; }
     const previewKey = timingJob.status === "ready" ? `${timingJob.requestId}:${KaraokeTiming.fingerprint(project)}` : null;
@@ -935,6 +964,7 @@
     try {
       const job = await request({ type: "timing-status", videoId });
       if (token === generation) { timingJob = job; showTimingJob(); }
+      await refreshAudioCache();
     } catch (error) { if (token === generation) timingStatus.textContent = error.message; }
     finally { timingPollBusy = false; }
   }
@@ -957,6 +987,7 @@
     const state = await request({ type: "helper-status" });
     helperReady = state.ready;
     helperAvailable = state.protocol === 1;
+    void refreshAudioCache();
     helperStatus.textContent = state.error || `${state.distro?.PRETTY_NAME || "Linux"} · Protocol ${state.protocol}${state.protocol !== 1 ? " (update required)" : ""}\n` + Object.entries(state.dependencies || {}).map(([name, info]) => `${name}: ${info.available ? info.version : "missing"}`).join("\n");
     helperStatus.style.whiteSpace = "pre-wrap";
     installation.open = !helperReady;
@@ -999,7 +1030,7 @@
   }
   const publicationReview = el("div", null, repositorySection, { role: "region", "aria-label": "Confirm GitHub publication", style: "padding:12px;border:1px solid #b58aef;border-radius:8px;margin-top:12px" });
   publicationReview.hidden = true;
-  const publishButton = repositoryButton("Publish translation to GitHub", async () => {
+  const publishButton = repositoryButton("Publish to GitHub", async () => {
     publicationReview.hidden = true;
     requireProject();
     if (!project.blocks.some(b => b.text.trim())) throw new Error("Load lyrics before publishing.");
@@ -1016,7 +1047,7 @@
       el("h3", destination.sha ? "Replace the existing GitHub file?" : "Publish this project on GitHub?", publicationReview);
       el("p", `${destination.target.repo} · ${destination.target.branch}`, publicationReview);
       el("p", destination.file, publicationReview, { style: "overflow-wrap:anywhere" });
-      el("p", "This publishes all local translation languages and shared lyrics, timing, furigana and display settings in one commit. Other remote languages are kept.", publicationReview);
+      el("p", "This publishes the current translation with its lyrics, timing, furigana and display settings in one commit. Other remote languages are kept.", publicationReview);
       const actions = el("div", null, publicationReview, { class: "row" });
       const confirm = button("Confirm publication", actions, async () => {
         confirm.disabled = true; cancel.disabled = true; publishButton.disabled = true;
@@ -1025,7 +1056,10 @@
           repositoryNotify("Publishing…");
           await request({ type: "repository-publish", project: snapshot, videoTitle, sha: destination.sha, target: destination.target });
           publicationReview.hidden = true;
-          if (generation === currentGeneration) { repositorySection.open = false; catalogKnown = false; updatePublicationState(); }
+          if (generation === currentGeneration) {
+            repositorySection.open = false; catalogKnown = false; updatePublicationState();
+            updateTranslationLink({ source: destination.target, file: destination.file });
+          }
           if (generation === currentGeneration) repositoryNotify(`Published to ${destination.target.repo}. The catalog updates after the repository Action finishes.`);
         } catch (error) {
           publicationReview.hidden = true;
@@ -1040,9 +1074,12 @@
       repositoryNotify("Review the destination below and choose Confirm publication.");
       publicationReview.scrollIntoView({ block: "nearest" });
       confirm.focus({ preventScroll: true });
-    } finally { publishButton.disabled = false; publishButton.textContent = "Publish translation to GitHub"; }
+    } finally { publishButton.disabled = false; publishButton.textContent = "Publish to GitHub"; }
   });
-  const deleteRemote = repositoryButton('Delete translation from GitHub', async () => {
+  publishButton.className = 'primary-button';
+  const openTranslation = el('a', 'Open in GitHub', repositoryActions, { class: 'button-link', target: '_blank', rel: 'noopener noreferrer' });
+  openTranslation.hidden = true;
+  const deleteRemote = repositoryButton('Delete from GitHub', async () => {
     requireProject();
     publicationReview.hidden = true;
     const token = generation, requestedId = videoId, language = project.translationLanguage;
@@ -1136,13 +1173,13 @@
     { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Furigana are small kana readings above kanji. Generate them with the dictionary; Show furigana is enabled automatically. The dictionaries download once; lyrics stay on your computer. Check the readings against the singing." },
     { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics or the translation in Line editor. Changes save locally. Changing original text clears that line’s furigana, so generate or correct its readings afterward." },
     { id: "readings", chapter: "Basics", title: "Correct readings", target: () => rows.querySelector(".block.selected .furigana-editor") || rows.querySelector(".furigana-editor") || generateFurigana, text: "Open Edit furigana readings to correct a word’s kana. Listen to the singer to choose the right reading. Changes save automatically. Generate furigana first if no readings are shown." },
-    { id: "global-timing", chapter: "Basics", title: "Align the whole song", target: () => startAt, text: "Start at sets when the first lyric begins, for example 0:33. Or select a line and use Sync with video position. Shifts affecting other lines ask for confirmation. Reset Start at removes the overall shift, keeping individual line times." },
+    { id: "global-timing", chapter: "Basics", title: "Align the whole song", target: () => startAt, text: "Start at sets when the first lyric begins, for example 0:33. Or select a line and use Sync with video position. Shifts affecting other lines ask for confirmation. The cross inside Start at sets the first lyric to 0:00 and shifts all timed lyrics by the same amount." },
     { id: "line-timing", chapter: "Basics", title: "Time individual lines", target: () => rows.querySelector(".block.selected .row + .row, .block .row + .row") || editor, text: "Enter Start and End as minutes:seconds, such as 3:32.250. Changing a timed Start also shifts later lines after confirmation. End changes only this line. A blank End lasts until the next timed line." },
     { id: "play", chapter: "Basics", title: "Ready to sing", target: () => fontSize, text: "Set size and position separately for the original and translation, or hide either one. These settings save with the project. Opening Settings enables Karaoke; closing it leaves Karaoke on. Use the Karaoke button or Alt+K to toggle it." },
     { id: "ai", chapter: "Advanced", title: "AI features", target: () => automatic.querySelector("summary"), text: "OpenAI translates text and can add furigana. AudioShake recognizes and times lyrics from audio. Each needs its own API key and charges for requests. Starting without lyrics? Generate timed lyrics, apply the result, then translate: both languages use the same timing." },
     { id: "ai-furigana", chapter: "Advanced", title: "AI features · Translation and furigana", target: () => apiKey, text: "Choose a model and translation language, then click Translate all lines. The source language is detected automatically. Generate furigana and Convert Japanese romaji to kanji/kana are on by default; turn either off if unwanted. Existing work asks for confirmation before replacement. Lines already in the target language need no translation. OpenAI receives text, not audio." },
     { id: "ai-audio-setup", chapter: "Advanced", title: "AI features · Audio setup", target: () => helperSection.querySelector("summary"), text: "Audio timing needs the Linux audio helper. Follow Installation instructions and click Check again. Enter your AudioShake key in AI features; leave Audio language on Auto for detection. Videos up to 45 minutes are supported; livestreams are not." },
-    { id: "audio-timing", chapter: "Advanced", title: "AI features · Generate timed lyrics", target: () => useExisting, text: "Keep Use existing lyrics on to fix timing while preserving text, translations and furigana. Turn it off to recognize what is actually sung, useful for live versions or shortened anime intros. Generate timed lyrics sends the full audio to AudioShake and starts a paid task. Downloaded audio is reused while still cached. Clear audio file removes that local copy; the next task downloads it again." },
+    { id: "audio-timing", chapter: "Advanced", title: "AI features · Generate timed lyrics", target: () => timingStart, text: "Existing lyrics are automatically aligned to the recording while preserving text, translations and furigana. Without existing lyrics, AudioShake recognizes what is actually sung. Generate timed lyrics sends the full audio to AudioShake and starts a paid task. Downloaded audio is reused while still cached. Clear audio file is available when the local copy exists and no task is running. Removing it makes the next task download it again." },
     { id: "ai-timing-review", chapter: "Advanced", title: "AI features · Review timing", target: () => timingActions, text: "When timing finishes, review the preview before Apply. Recognized lyrics replace existing text, translations and furigana after confirmation. Apply resets the overall timing shift; uncertain matches stay untimed. Discard keeps your project. Cancel stops local waiting; a submitted task may still be charged. Resume continues the same task." },
     { id: "ai-costs", chapter: "Advanced", title: "AI features · Monthly costs", target: () => usageRow, text: "The total shows this month’s recorded costs. Open Details to choose a month and compare providers. For AudioShake, enter your USD price per API credit and save it. These are estimates for this extension, not your provider’s invoice." },
     { id: "terms", chapter: "Advanced", title: "Fix a recurring reading", target: () => correctionTerm, text: "Enter a word and its correct kana reading, then apply it throughout this song. A shortcut beside a line’s reading can fill these fields for you. Other projects are unchanged." },
@@ -1189,7 +1226,7 @@
     const merged = C.mergeTranslations(project, incoming);
     if (merged.replacement) {
       if (!window.confirm('The original lyrics differ. Replace the entire project, including the current translation, timing and display settings? Export JSON first to keep a backup.')) return false;
-    } else if (merged.conflicts.length && !window.confirm(`Replace the current ${project.translationLanguage} translation with the ${incoming.translationLanguage} translation? Timing will be kept.`)) return false;
+    } else if (merged.conflicts.length && !window.confirm(`Replace the current ${project.translationLanguage} translation with the ${incoming.translationLanguage} translation? ${fullImport ? 'Timing, furigana and display settings will be reviewed next.' : 'Timing will be kept.'}`)) return false;
     if (fullImport && project.blocks.length && !merged.replacement) {
       if (!window.confirm('Import this project’s timing, furigana and display settings as well? Cancel keeps your current project.')) return false;
       const translations = merged.project.blocks;
@@ -1206,8 +1243,6 @@
     if (source) el("a", `${source.provider} ↗ `, sources, { href: source.url, target: "_blank", rel: "noopener noreferrer" });
   }
   function refresh() {
-    timingHadText = !!project?.blocks.some(row => row.text.trim());
-    useExisting.checked = timingHadText;
     shownTimingResult = null;
     updateTimingControls();
     updateSelectionWarning();
@@ -1305,8 +1340,11 @@
       event.preventDefault(); event.stopPropagation(); try { mark(); } catch (error) { fail(error); }
     }
   }, true);
-  // Keep editor keystrokes from reaching YouTube's global playback shortcuts.
-  panel.addEventListener("keydown", event => event.stopPropagation());
+  // Keep editor interactions away from YouTube, including when the host is
+  // inside the fullscreen player. Preserve default input/button behavior.
+  for (const type of ["click", "dblclick", "pointerdown", "pointerup", "mousedown", "mouseup", "keydown", "keypress", "keyup"]) {
+    host.addEventListener(type, event => event.stopPropagation());
+  }
   const overlayHost = document.createElement("div");
   overlayHost.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:60";
   const overlayRoot = overlayHost.attachShadow({ mode: "open" }); overlayRoot.append(style.cloneNode(true));
@@ -1334,6 +1372,21 @@
         el("rt", aligned.annotation, ruby);
       } else node.append(document.createTextNode(aligned.base));
       node.append(document.createTextNode(aligned.suffix));
+    }
+  }
+  function separateCaptions() {
+    // Measure the preferred positions afresh after text, ruby or viewport changes.
+    overlay.style.transform = "";
+    translationOverlay.style.transform = "";
+    if (overlay.hidden || translationOverlay.hidden) return;
+    const originalBounds = caption.getBoundingClientRect();
+    const translationBounds = translated.getBoundingClientRect();
+    const originalAbove = Number(position.value) >= Number(translationPosition.value);
+    const upper = originalAbove ? originalBounds : translationBounds;
+    const lower = originalAbove ? translationBounds : originalBounds;
+    const overlap = upper.bottom + 8 - lower.top;
+    if (overlap > 0) {
+      (originalAbove ? overlay : translationOverlay).style.transform = `translateY(-${Math.ceil(overlap)}px)`;
     }
   }
   let lastCaption = "";
@@ -1415,9 +1468,40 @@
     const values = [active?.text || "", active?.translations[project?.translationLanguage] || "", nextRow?.text || ""].map(text => text.trim());
     const signature = JSON.stringify([values, project?.furiganaEnabled, active?.furigana, nextRow?.furigana]);
     if (signature !== lastCaption) { renderOriginal(original, active); translated.textContent = values[1]; renderOriginal(next, nextRow); translated.hidden = !values[1]; next.hidden = !values[2]; lastCaption = signature; }
+    separateCaptions();
     if (!panel.hidden) clock.textContent = `Video: ${(media?.currentTime || 0).toFixed(2)}s · ${project?.blocks.length || 0} lines`;
   }
   document.body.append(host);
+  const pendingMcpInputs = new WeakSet();
+  root.addEventListener('input', event => pendingMcpInputs.add(event.target));
+  root.addEventListener('change', event => pendingMcpInputs.delete(event.target), true);
+  browser.runtime.onMessage.addListener(message => {
+    if (!['mcp-snapshot', 'mcp-reload'].includes(message.type)) return;
+    return (async () => {
+    try {
+      requireProject();
+      if (message.videoId !== videoId) throw new Error('Video changed.');
+      const token = generation;
+      await saveQueue;
+      if (token !== generation) throw new Error('Video changed.');
+      if (root.activeElement && pendingMcpInputs.has(root.activeElement)) throw new Error('Finish editing the active field before using MCP.');
+      if (message.type === 'mcp-snapshot') {
+        return { project: C.exportProject(C.singleTranslation(project)), revision: storageState.revision, duration: video()?.duration ?? null };
+      }
+      if (storageState.revision !== message.revision || JSON.stringify(C.exportProject(C.singleTranslation(project))) !== JSON.stringify(message.previous)) {
+        throw new Error('Local editor changed during MCP apply. Reload to see the saved proposal; current editor edits were preserved.');
+      }
+      project = C.validate(message.state.project); storageState = message.state;
+      generation++; selected = Math.min(selected, Math.max(0, project.blocks.length - 1));
+      refresh(); notify('Reviewed lyrics and translation applied through MCP.');
+      void findCatalogMatch();
+      return { applied: true };
+    } catch (error) {
+      if (message.type === 'mcp-reload') fail(error);
+      return { error: error.message };
+    }
+    })();
+  });
   tick(); setInterval(tick, 100);
   globalThis.KaraokeUI = type => {
     if (type === "toggle-enabled") return setEnabled(!enabled);

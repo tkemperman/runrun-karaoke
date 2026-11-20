@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0 — Released 2026-11-20
+
+- Add optional local MCP integration and the discoverable fix-lyrics skill. Inspect existing lyrics, listen to cached/downloaded audio, consult LRCLIB, and stage a timestamped original/new text-and-translation table. Apply only after review; publishing lyrics and cleaning up audio each require separate permission. Preserve recovery JSON and reject stale project/repository revisions.
+- Fix synchronization to capture the clicked video position accurately and preserve playback state. Replace Reset Start at with an inline cross that sets 0:00, remove its placeholder, refresh timing after LRCLIB/GitHub loads, and leave untimed Start at empty.
+- Align existing lyrics automatically with AudioShake; remove Use existing lyrics. Keep translation and optional AI furigana with OpenAI. Map strict translation responses through short request-local IDs while preserving persistent lyric IDs.
+- Support manual kanji annotations above kana through the shared project/catalog validator. Prevent original and translated captions from overlapping when wrapped text or ruby requires more space.
+- Make Publish to GitHub primary, add a neutral Open in GitHub link between Publish and Delete, and show Open/Delete only for published translations.
+- Check actual cached audio presence through the native helper. Disable Clear audio file when absent, refresh after deletion/download/video changes, and preserve active-task guards. Existing helper installations need the updated helper for this check.
+- Review all Markdown files and walk through all 20 tutorial steps in Firefox, including highlighted targets, navigation, text-input arrow keys, Escape, and highlight cleanup. Verify audio cleanup availability with the cached file present, temporarily absent, and restored.
+- Validation: 204 JavaScript tests, 29 Python tests and syntax checks pass. Ruff security rules pass for the native helper and MCP code. Mozilla’s add-on linter reports zero errors, warnings and notices for the release archive. Live MCP inspection/staging/audio tests preserve the existing 46-line project. No new paid API calls or authenticated GitHub writes were made during release preparation.
+- Build both unsigned 1.5.0 distributions; verify ZIP integrity, exact runtime/helper/privacy files and version metadata. The release is not signed, uploaded or published. Full cross-platform playback acceptance and live MCP apply/publication remain separate validation work.
+
 ## 1.4.5 — Released 2026-11-19
 
 - Harden the Linux native helper after a security review. Native messages must be JSON objects with strictly shaped request IDs, task receipts must be private regular files in a private user-owned directory, and malformed or oversized service responses are rejected before processing.

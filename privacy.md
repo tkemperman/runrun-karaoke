@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: November 19, 2026
+Last updated: November 20, 2026
 
 ルンルンKARAOKE provides editable bilingual karaoke lyrics on YouTube. The extension does not include advertising, analytics, or telemetry.
 
@@ -12,13 +12,19 @@ The extension stores karaoke projects, their catalog origin and local-change sta
 
 ## External services
 
+### Optional local MCP integration
+
+When separately installed, the local runrun-karaoke MCP bridge lets your chosen agent read karaoke projects and open YouTube video metadata, listen to extracted audio fragments, stage corrections, and apply approved changes. It uses a private same-user Unix socket, with no public network listener. API keys remain in the extension background and are not returned to the agent. Audio preparation reuses the helper cache or downloads/extracts audio from YouTube without calling a paid transcription service. Audio fragments and lyrics returned to your agent may be processed by that agent's provider under its own privacy policy. The fix-lyrics skill asks for review before applying, and separate permission before GitHub publication and cleanup. Before/after recovery JSON is kept in `~/.local/state/runrun-karaoke-mcp`; cleanup preserves these backups. Removing the optional MCP integration does not remove recovery files or the shared audio cache.
+
+### Services used by extension features
+
 The extension contacts the following services for their respective features:
 
 - **LRCLIB:** Lyrics searches send your search query, which may include a song title or artist, to lrclib.net.
 
 - **Genius:** When LRCLIB returns no usable lyric text, search sends your query and Genius API token to api.genius.com. Selected search candidates are fetched from genius.com to extract lyrics. The API token is never sent to lyric pages. Blocked pages and connection failures are reported separately from empty results.
 
-- **AudioShake and the Linux helper:** Only Generate timed lyrics starts processing. The helper downloads the current video’s complete audio from YouTube or reuses a validated temporary copy for that video and uploads audio and, when selected, original lyrics as a transcript to api.audioshake.ai using your AudioShake key. AudioShake receives the selected language and a random request ID. The helper downloads size-limited JSON timing results from the service’s output storage. API charges may apply. Cancelling stops local work; a submitted remote task may continue. Validated audio is kept per video in a private directory named runrun-karaoke-audio-<user ID> under the system temporary directory for reuse until the system or user removes it. Clear audio file under AudioShake timing deletes the cached audio for the current video. Task-local audio copies, transcripts and command logs are removed after submission or handled failure/cancellation. An abrupt process kill or system crash may leave temporary files for manual removal. Keys are passed only to the corresponding service and temporarily to the helper; they are not written to helper files. Local task receipts contain request/video/task IDs and submission state so interrupted tasks can be resumed without automatic resubmission. Receipt directories and files are restricted to the current user and receipts are replaced atomically; the installer applies the same private-file protections to helper files. Extension storage also keeps pending result data, the submitted transcript and project fingerprint until Discard or Apply. Project exports contain no keys, pending tasks or audio. AudioShake’s own retention policies apply to uploaded assets and results.
+- **AudioShake and the Linux helper:** Only Generate timed lyrics starts processing. The helper downloads the current video’s complete audio from YouTube or reuses a validated temporary copy for that video and uploads audio and any existing original lyrics as a transcript to api.audioshake.ai using your AudioShake key. AudioShake receives the selected language and a random request ID. The helper downloads size-limited JSON timing results from the service’s output storage. API charges may apply. Cancelling stops local work; a submitted remote task may continue. Validated audio is kept per video in a private directory named runrun-karaoke-audio-<user ID> under the system temporary directory for reuse until the system or user removes it. Clear audio file under AudioShake timing deletes the cached audio for the current video. Task-local audio copies, transcripts and command logs are removed after submission or handled failure/cancellation. An abrupt process kill or system crash may leave temporary files for manual removal. Keys are passed only to the corresponding service and temporarily to the helper; they are not written to helper files. Local task receipts contain request/video/task IDs and submission state so interrupted tasks can be resumed without automatic resubmission. Receipt directories and files are restricted to the current user and receipts are replaced atomically; the installer applies the same private-file protections to helper files. Extension storage also keeps pending result data, the submitted transcript and project fingerprint until Discard or Apply. Project exports contain no keys, pending tasks or audio. AudioShake’s own retention policies apply to uploaded assets and results.
 
 - **OpenAI:** When you request translation with optional furigana, the extension sends the project's lyrics, line identifiers, selected model, and target language where applicable to api.openai.com. Your OpenAI API key is sent to OpenAI for authentication. No video or audio is sent to OpenAI. Requests use `store: false`; this does not override OpenAI's own data retention policies.
 

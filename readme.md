@@ -6,6 +6,10 @@
 
 A Firefox add-on in development for synchronized lyrics on YouTube, with the original text above its translation. Designed to support Japanese kanji and kana, live performances, and editable timing for each video.
 
+## Fix lyrics through MCP
+
+The optional [local MCP integration](mcp/README.md) connects an agent to the running extension for audio-based lyric review. The [fix-lyrics skill](skills/fix-lyrics/SKILL.md) compares existing lyrics with the live recording (or generates missing lyrics), updates the target-language translation and Japanese furigana, and shows a timestamped old/new review table before applying. Publication and audio cleanup each require separate user permission. The skill source lives in this repository and can be linked into the personal Codex skill directory. No paid AI calls are made by the MCP server itself.
+
 ## Contact
 
 Thomas Kemperman — [thomas@silverwoodslabs.com](mailto:thomas@silverwoodslabs.com?subject=%E3%83%AB%E3%83%B3%E3%83%AB%E3%83%B3KARAOKE)
@@ -17,7 +21,7 @@ Lyrics and translations obtained from external sources are not covered by this p
 
 ## Project status
 
-Version **1.4.5 was released on November 19, 2026**. This security release hardens the Linux helper's native-message validation, private task receipts, installer writes and external-response limits without changing the project schema or user workflow. It retains the 1.4.4 editing, catalog and tutorial behavior. Schema 4 preserves display settings alongside lyrics, translations, timing and furigana; schemas 1–3 remain importable. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
+Version **1.5.0 was released on November 20, 2026**. This release adds optional local MCP integration and the fix-lyrics skill, improves synchronization and translation response mapping, supports kanji annotations above kana, and prevents overlapping captions. Schema 4 remains compatible with existing projects; schemas 1–3 remain importable. See [changelog.md](changelog.md) for validation and remaining acceptance coverage. The release package is unsigned and has not been published.
 
 Implemented: a bilingual overlay, per-video local storage, manual timing and synchronization controls, LRC and JSON import/export, catalog, LRCLIB and Genius discovery, Surprise Me, optional AI translations, toggleable Japanese furigana with dictionary and AI generation, editable readings and song-wide term corrections, AudioShake recognition and line alignment, monthly API cost estimates, and configurable activation/display settings. No demo, real song lyrics, or verified timing are bundled.
 
@@ -31,19 +35,24 @@ Copy [lyrics-repository-template](lyrics-repository-template/README.md), includi
 
 In the lyrics editor, open **Lyrics repositories · GitHub**:
 
-- **Publish translation to GitHub** reviews the repository, branch and file path inside Settings. **Confirm publication** publishes the current translation as `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`. Each file contains one translation language and the shared original lyrics, timing, furigana and display settings. Other remote languages remain intact. Changes to the project or reviewed branch invalidate publication; **Cancel** leaves the repository unchanged.
-- **Delete translation from GitHub**, the red button next to Publish, finds the current video and selected translation language in the catalog. A confirmation dialog shows the repository, branch and file; deletion checks the reviewed file revision. Shared files containing other languages are not deleted by this action. The local project stays intact. The developer section starts expanded only when the active translation is known to be unpublished.
+- **Publish to GitHub** reviews the repository, branch and file path inside Settings. **Confirm publication** publishes the current translation as `translations/SANITIZED_VIDEO_TITLE-VIDEO_ID/LANGUAGE.json`. Each file contains one translation language and the shared original lyrics, timing, furigana and display settings. Other remote languages remain intact. Changes to the project or reviewed branch invalidate publication; **Cancel** leaves the repository unchanged.
+- **Open in GitHub**, between Publish and Delete, opens the published file for the current video and translation language in a new tab. It appears when a catalog match is known or immediately after publication.
+- **Delete from GitHub**, the red button after Open in GitHub, finds the current video and selected translation language in the catalog. A confirmation dialog shows the repository, branch and file; deletion checks the reviewed file revision. Shared files containing other languages are not deleted by this action. The local project stays intact. The developer section starts expanded only when the active translation is known to be unpublished.
 
 Repository folder titles come from the current YouTube video, independently of the lyric/translation title. Folder titles use lowercase Unicode letters and numbers (including Japanese), with whitespace and punctuation converted to single hyphens. Repeated hyphens collapse and leading/trailing hyphens are removed. Slugs are limited to 220 UTF-8 bytes; empty slugs use `untitled`. The YouTube ID keeps its original case. Matching and loading use the exact YouTube video ID, independently of the title or folder name. Existing ID-only catalog paths remain readable. Changing the YouTube video title changes its upload path.
 
 The Action regenerates `index.json` after uploads. Reload the video after it finishes to refresh catalog availability; raw GitHub caching can delay visibility. The same configured repository serves public reads and explicit developer writes. Catalog checks can automatically load English only when there are no local changes. Authenticated inspection and publication use the saved token exclusively in the background. Publication uses the Git data API for one commit across language files; remote deletion uses the Contents API.
 
-Version 1.4.5 validation: 172 JavaScript tests, 20 Python tests, syntax checks and Ruff security rules pass. Mozilla's add-on linter reports no errors, warnings or notices for the packaged release. The earlier tutorial walkthrough remains applicable because this release does not change the interface. A deeper tutorial review remains on the TODO list. GitHub publication is covered by mocked tests; authenticated publication and remote deletion still need live end-to-end verification.
+Version 1.5.0 validation: 204 JavaScript tests, 29 Python tests, syntax checks and Ruff security rules pass. Mozilla’s add-on linter reports zero errors, warnings and notices. All 20 tutorial steps were checked in Firefox, including navigation and highlighted targets; the audio cleanup button was checked with a present, absent and restored file. Details are recorded in [changelog.md](changelog.md). Paid generation and authenticated GitHub writes are separate from the release checks; mocked tests do not establish transcription or pronunciation quality.
 
 ## Feature scope
 
-### Version 1.4.5
+### Version 1.5.0
 
+- Optional MCP project/audio access and a reviewed fix-lyrics workflow, with separate publication and cleanup approval.
+- Exact synchronization without starting playback, a Start at reset cross, and refreshed timing after imports.
+- Reverse ruby, overlapping-caption avoidance, short request-local translation IDs, and published-file GitHub links.
+- Audio cleanup enabled only when the current cached file exists.
 - Private, atomically replaced native-helper files and task receipts with symlink and ownership checks.
 - Strict native JSON/request-ID validation and bounded AudioShake response processing.
 - Line-based karaoke overlay with translations directly underneath.
@@ -131,11 +140,15 @@ Automatic translation and general romaji-to-Japanese conversion are intentionall
 
 The gear or **Alt+L** toggles the editor open or closed. The Close button also closes it. **Display & timing** controls the timing delay (positive means later), separate visibility, text size and vertical placement for original lyrics and translation, **Show next line**, and **Show furigana**. These display choices are saved in the project, JSON exports and GitHub files. The checkbox and its clickable label share one row. Toggle karaoke with the microphone button or Alt+K; there is no duplicate on/off button in the editor.
 
+When captions would overlap, the upper caption moves upward just enough to keep an 8px gap. This adapts to wrapped text, ruby, the next-line preview and player resizing without changing your saved position settings. Captions return to their preferred positions when the extra space is no longer needed.
+
+Loading lyrics from LRCLIB or GitHub immediately updates **Start at** to the first timed lyric. LRCLIB clears the previous offset; GitHub restores the saved timing and offset, including when the lyric text matches the current project. Manual GitHub loads ask before importing timing, furigana and display settings into a matching project. Untimed lyrics leave **Start at** blank.
+
 Use **Start at** to set when the first lyric should appear, in `minutes:seconds` with optional milliseconds (for example, `0:32.250`). With untimed lyrics, this sets the first non-empty line’s start. Alternatively, select a line in **Line editor** and click **Sync with video position** as it begins. Sync sets an untimed line’s start or adjusts the global delay for an already timed line, preserving relative timing and milliseconds. A yellow warning appears when selecting untimed lyrics and remains above the editor while any lyric lines still need timing. Set each remaining line’s Start time; setting the first start does not automatically time the rest of the song.
 
-**Start** and **End** in Line editor show video times including the delay and update when it changes. Editing these values converts them back to stored timestamps automatically. For example, a first lyric at `15.27` seconds with **Start at** set to `0:32` produces a delay of `16.73` seconds and an editor start of `0:32`. Start at, Start and End use the placeholder `0:32.250`. Fractions with one to three decimal places are supported; a blank End lasts until the next timed line. There is no separate delay input. Opening Settings automatically enables Karaoke; closing Settings leaves it enabled. Use **Karaoke** or **Alt+K** to turn it off.
+**Start** and **End** in Line editor show video times including the delay and update when it changes. Editing these values converts them back to stored timestamps automatically. For example, a first lyric at `15.27` seconds with **Start at** set to `0:32` produces a delay of `16.73` seconds and an editor start of `0:32`. Start and End use the placeholder `0:32.250`; Start at has no placeholder. Fractions with one to three decimal places are supported; a blank End lasts until the next timed line. There is no separate delay input. Opening Settings automatically enables Karaoke; closing Settings leaves it enabled. Use **Karaoke** or **Alt+K** to turn it off.
 
-Changing a line’s start in Line editor shifts that line’s end and all following lines by the same amount after confirmation. Existing durations and gaps are preserved. Setting an untimed line’s first start only times that line. Global shifts affecting other timed lines also ask for confirmation. **Reset Start at** resets the overall offset without changing individual timestamps.
+Changing a line’s start in Line editor shifts that line’s end and all following lines by the same amount after confirmation. Existing durations and gaps are preserved. Setting an untimed line’s first start only times that line. Global shifts affecting other timed lines also ask for confirmation. The cross inside **Start at** sets the first lyric to **0:00** and shifts all timed lyrics by the same amount, preserving their relative timing.
 
 ## Applying translations
 
@@ -169,6 +182,8 @@ In the video's **Display & timing** panel, select **Generate furigana (dictionar
 
 Correct generated or imported readings under **Line editor → Edit furigana readings**. Readings cover the complete displayed dictionary word, including its kana; matching leading kana and okurigana are kept outside the ruby when displayed. Dictionary matching cannot guarantee the intended pronunciation of ambiguous words, names or creative sung readings. Unknown text stays unchanged. Editing original lyrics clears that line's annotations. Generation can restore them; regeneration replaces existing readings after confirmation. Repeating a line copies its readings.
 
+Manual annotations can also place kanji above kana lyrics, for example `ドーマン` with `道満` above it. This uses the same ruby display and is preserved in project JSON. Automatic furigana generation still produces kana readings; regeneration replaces manual annotations after confirmation.
+
 Project JSON schema 4 stores a single `source` object (`provider` and `url`), or `null` when absent. Schema 1 and 2 imports retain only the last entry from their `sources` array. It preserves furigana segments and visibility, together with lyrics, translations and timing. Imported readings work without downloading dictionaries. Schema 1 projects migrate automatically with furigana off. LRC contains no furigana; use project JSON for full backups. Invalid annotations are rejected before replacing existing work.
 
 The dictionary implementation is adapted from Furikazan (MIT, Copyright 2026 SilverwoodsLabs). EDICT2 and ENAMDICT are provided by the Electronic Dictionary Research and Development Group; see [dictionary licence and attribution](https://www.edrdg.org/edrdg/licence.html). The extension downloads dictionary data separately and does not bundle it.
@@ -182,7 +197,7 @@ The furigana dictionary button becomes **Re-generate furigana (dictionary)** whe
 ## Known limitations
 
 - Full reference-performance timing validation remains outstanding; AudioShake recognition and line alignment are available, while word highlighting remains planned.
-- Neither dictionary nor contextual AI readings guarantee the sung pronunciation. Review ambiguous words and names by ear. Correcting furigana from the audio track is a TODO; AudioShake has no publicly documented kana-reading or phoneme output. Discuss an audio-based method before implementation.
+- Neither dictionary nor contextual AI readings guarantee the sung pronunciation. Review ambiguous words and names by ear. The optional fix-lyrics skill supports agent-led review against audio; the extension does not automatically derive sung readings from AudioShake. Built-in audio-based furigana generation remains a separate investigation.
 - AI furigana has automated mocked-response coverage and user-confirmed live API generation; comprehensive Firefox visual/playback testing remains outstanding.
 - Splitting/merging passages uses manual editing and adding/removing lines; dedicated split/merge controls are still planned.
 - The last LRC line has an open end unless an end time is supplied; set its end in the editor to hide it after the final vocals.
@@ -196,9 +211,9 @@ Use English for code comments, identifiers, documentation, commit messages, and 
 
 Run `npm test` for the JavaScript tests, including search, translation/furigana, timing, usage costs, native messaging and GitHub publication confirmation. Run `npm run test:native` for the Python helper tests and `npm run check` for JavaScript/Python syntax and shell checks. No npm dependencies are required. The JavaScript test command uses Node.js 22 or newer.
 
-Run `npm run package` to create `dist/runrun-karaoke-1.4.5.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
+Run `npm run package` to create `dist/runrun-karaoke-1.5.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
 
-Run `npm run package:local` to create `dist/runrun-karaoke-1.4.5-local.zip` for temporary Firefox testing. Its display version is `1.4.5-local` and its internal Firefox version is `1.4.5.1`, keeping it distinguishable from the public 1.4.5 package without changing source version metadata.
+Run `npm run package:local` to create `dist/runrun-karaoke-1.5.0-local.zip` for temporary Firefox testing. Its display version is `1.5.0-local` and its internal Firefox version is `1.5.0.1`, keeping it distinguishable from the public 1.5.0 package without changing source version metadata.
 
 ### Guided tutorial
 
@@ -216,15 +231,15 @@ Each line offers **Add line before**, **Add line after**, **Jump to**, reorder a
 
 Search uses LRCLIB first; untimed text counts as a usable result. Only when none is usable does it search Genius with your saved Genius API token. Choose a recording manually. Results and loaded projects retain the provider and source URL. Empty searches, connection errors, and Genius blocks are reported separately. Search never starts paid AI processing.
 
-AI features combines translation and optional contextual furigana in one OpenAI call. Generate furigana is selected by default and saved as a preference. Clear it to preserve existing readings. The complete response is validated before application; replacement of translations/readings is confirmed together. Dictionary generation remains independent.
+AI features combines translation and optional contextual furigana in one OpenAI call. Generate furigana is selected by default and saved as a preference. Clear it to preserve existing readings. The complete response is validated before application; replacement of translations/readings is confirmed together. Requests use short line numbers to keep repeated lyrics correctly linked to their saved IDs. Unknown or duplicate IDs and invalid translations are reported separately, without applying a partial result. Dictionary generation remains independent.
 
-For AudioShake, install the [Linux helper](native/README.md) from Settings, choose Check again, save a separate AudioShake key and select a language (Auto by default). Generate timed lyrics uploads complete audio and optionally existing lyrics. Without supplied lyrics, AudioShake transcribes and aligns the actual recording, useful for live versions and shortened intros. Apply the recognized lyrics, then use OpenAI translation to add translations and optional furigana while retaining their timing. Videos must be complete, finite and at most 45 minutes. Paid API usage applies only on explicit generation.
+For AudioShake, install the [Linux helper](native/README.md) from Settings, choose Check again, save a separate AudioShake key and select a language (Auto by default). Generate timed lyrics uploads complete audio and automatically includes existing lyrics for alignment. When there are no existing lyrics, AudioShake transcribes and aligns the actual recording, useful for live versions and shortened intros. Apply the recognized lyrics, then use OpenAI translation to add translations and optional furigana while retaining their timing. Videos must be complete, finite and at most 45 minutes. Paid API usage applies only on explicit generation.
 
-The helper reuses validated temporary audio for the same video when available, avoiding another download and conversion after lyric edits. It still uploads the audio and current lyrics for each new paid timing task. **Clear audio file** immediately deletes the current video’s cached audio; the next timing request downloads it again. This leaves lyrics, timing and saved task results intact. Progress covers download or reuse, conversion, upload and server processing. Cancel stops local work; remote tasks may continue. Resume follows the same task ID, including after a Firefox restart. An uncertain submission is never automatically repeated. Preview and Apply/Discard are separate. With existing lyrics, text, IDs, translations and readings are preserved; ambiguous or unmatched lines remain untimed. Recognition creates new lines and asks before replacing project content. Application resets the global offset to zero and rejects stale projects or invalid timing. Review by listening and use Line editor for corrections. This version applies line timing only.
+The helper reuses validated temporary audio for the same video when available, avoiding another download and conversion after lyric edits. It still uploads the audio and current lyrics for each new paid timing task. **Clear audio file** is enabled only when a cached file exists and no timing/cleanup operation is active. It immediately deletes the current video’s cached audio; the next timing request downloads it again. This leaves lyrics, timing and saved task results intact. Progress covers download or reuse, conversion, upload and server processing. Cancel stops local work; remote tasks may continue. Resume follows the same task ID, including after a Firefox restart. An uncertain submission is never automatically repeated. Preview and Apply/Discard are separate. With existing lyrics, text, IDs, translations and readings are preserved; ambiguous or unmatched lines remain untimed. Recognition creates new lines and asks before replacing project content. Application resets the global offset to zero and rejects stale projects or invalid timing. Review by listening and use Line editor for corrections. This version applies line timing only.
 
 Native helper packaging is generated by `npm run package`; the archive includes a downloadable `native-helper.zip`. Run `npm test`, `npm run test:native` and `npm run check`. API fixtures verify contracts and preservation, but live provider compatibility and sung timing still require an actual video test.
 
-**Generate timed lyrics** with **Use existing lyrics** selected runs alignment on existing lyrics for the current live performance or cover, even when those lyrics are already timed. It preserves text, line IDs, translations and furigana and uses the same preview, stale-result protection and Apply/Discard controls. It is a new paid alignment request, not a global offset shift.
+**Generate timed lyrics** automatically runs alignment when the project contains lyrics for the current live performance or cover, even when those lyrics are already timed. It preserves text, line IDs, translations and furigana and uses the same preview, stale-result protection and Apply/Discard controls. It is a new paid alignment request, not a global offset shift.
 
 ## Monthly AI costs
 

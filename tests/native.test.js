@@ -84,3 +84,12 @@ test('audio cleanup rejects active tasks, invalid video IDs and helper errors',a
  idle.cleanup({type:'audio-cache-cleared'});
  await assert.rejects(idle.request({type:'timing-clear-audio',videoId}),/Update the Linux helper/);
 });
+test('audio presence is checked without keys or generation dependencies',async()=>{
+ const h=harness();h.status({type:'audio-cache-status',exists:true});
+ assert.equal((await h.request({type:'timing-audio-status',videoId})).exists,true);
+ assert.deepEqual(h.nativeMessages,[{type:'audio-cache-status',videoId}]);
+ h.status({type:'audio-cache-status',exists:false});
+ assert.equal((await h.request({type:'timing-audio-status',videoId})).exists,false);
+ h.status({type:'status',ready:true});
+ await assert.rejects(h.request({type:'timing-audio-status',videoId}),/Update the Linux helper/);
+});

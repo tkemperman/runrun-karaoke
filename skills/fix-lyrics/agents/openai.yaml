@@ -1,0 +1,9 @@
+interface:
+  display_name: "Fix lyrics"
+  short_description: "Controleer karaoke-lyrics met de live audio"
+  default_prompt: "Gebruik $fix-lyrics om de lyrics van deze video met de audio te vergelijken en verbeteringen voor te stellen."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "runrun-karaoke"
+      description: "Local karaoke projects, audio review and approved publication"

@@ -16,7 +16,7 @@ function harness(translation = {}, dictionary = {}, repositories = require("../s
       set: async data => Object.assign(saved, data)
     } }
   };
-  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeCore: C, KaraokeProjects: require("../src/projects.js"), KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary, ...globals});
+  vm.runInNewContext(fs.readFileSync('src/background.js', 'utf8'), {browser, KaraokeMCP: require('../src/mcp.js'), KaraokeCore: C, KaraokeProjects: require("../src/projects.js"), KaraokeRepositories: repositories, KaraokeProviders: new Map(), KaraokeTranslation: translation, KaraokeDictionary: dictionary, ...globals});
   return { saved, sent, command: name => command(name), request: (message, sender = {tab: {id: 7}, url: 'https://www.youtube.com/watch?v=h3chCOV_phw'}) => listener(message, sender) };
 }
 test('storage isolates projects by video and rejects invalid updates without replacing saved data', async () => {

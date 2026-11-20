@@ -28,7 +28,7 @@
         const previous = await read(videoId);
         // A user's queued edit wins over a freshly downloaded pristine copy,
         // but never over another user's edit or a deletion tombstone.
-        if (previous.revision !== expectedRevision && (expectedRevision > previous.revision || options.automatic || options.deleted || previous.dirty || previous.blocked)) throw new Error('Project changed in another tab. Reload before saving. Your current edits remain in the editor.');
+        if (previous.revision !== expectedRevision && (options.strict || expectedRevision > previous.revision || options.automatic || options.deleted || previous.dirty || previous.blocked)) throw new Error('Project changed in another tab. Reload before saving. Your current edits remain in the editor.');
         if (options.automatic && (previous.dirty || previous.blocked)) return previous;
         const project = value ? core.exportProject(core.singleTranslation(value)) : null;
         if (project && project.videoId !== videoId) throw new Error('Project belongs to another video.');

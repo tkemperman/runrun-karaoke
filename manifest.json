@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ルンルンKARAOKE",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "description": "Editable bilingual karaoke lyrics for YouTube videos.",
   "icons": {
     "16": "src/mascot-icon-transparent-16.png",
@@ -35,6 +35,7 @@
       "src/timing.js",
       "src/usage.js",
       "src/native.js",
+      "src/mcp.js",
       "src/background.js"
     ]
   },

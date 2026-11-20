@@ -21,10 +21,11 @@ function fixture(entries) {
   const context = {
     generation: 1, videoId: 'abcdefghijk', project: { translationLanguage: 'en', blocks: [{ text: 'Existing' }] },
     deleteRemote: { hidden: true },
+    openTranslation: { hidden: true, removeAttribute(name) { delete this[name]; } },
     repositorySection: { hidden: true }, Intl, el, section: text => el('details', text),
     button: (text, parent, action) => { const node = el('button', text, parent); node.click = action; return node; },
     C: { validate: value => value }, requireProject() {}, notify() {},
-    acceptProject: async value => { context.loaded = value; return true; },
+    acceptProject: async (value, fullImport) => { context.loaded = value; context.fullImport = fullImport; return true; },
     request: async message => { requests.push(message); return message.type === 'catalog-search' ? entries : { language: message.language }; }
   };
   vm.runInNewContext(controls + '\nglobalThis.ui = { findCatalogMatch, updatePublicationState, sourceChoices, catalogPanel, lyricsSearchPanel, matchingCatalog, catalogChoice, searchChoice };', context);
@@ -46,6 +47,20 @@ test('GitHub deletion is visible only for a known catalog match for the current 
   f.context.request = async () => { throw Error('Catalog unavailable'); };
   await f.ui.findCatalogMatch();
   assert.equal(f.context.deleteRemote.hidden, true);
+});
+test('Open in GitHub links to the matching GitHub file and clears stale destinations', async () => {
+  const english = { ...entry('en'), file: 'translations/日本語/en.json', source: { repo: 'example/catalog', branch: 'lyrics/review' } };
+  const f = fixture([english]); await f.ui.findCatalogMatch();
+  assert.equal(f.context.openTranslation.hidden, false);
+  assert.equal(f.context.openTranslation.href, 'https://github.com/example/catalog/blob/lyrics%2Freview/translations/%E6%97%A5%E6%9C%AC%E8%AA%9E/en.json');
+  f.context.project.translationLanguage = 'nl'; f.ui.updatePublicationState();
+  assert.equal(f.context.openTranslation.hidden, true);
+  assert.equal(f.context.openTranslation.href, undefined);
+  f.context.project.translationLanguage = 'en'; f.ui.updatePublicationState();
+  f.context.request = async () => { throw Error('Catalog unavailable'); };
+  await f.ui.findCatalogMatch();
+  assert.equal(f.context.openTranslation.hidden, true);
+  assert.equal(f.context.openTranslation.href, undefined);
 });
 test('without catalog matches only the search form is offered', async () => {
   const f = fixture([]); await f.ui.findCatalogMatch();
@@ -77,6 +92,7 @@ test('one catalog translation needs no language selector and switching modes nev
   assert.equal(f.requests.some(message => message.type === 'catalog-load'), false);
   await f.nodes.findLast(node => node.textContent === 'Use English translation').click();
   assert.equal(f.context.loaded.language, 'en');
+  assert.equal(f.context.fullImport, true);
 });
 test('multiple catalog translations default to English and load the selected language', async () => {
   const f = fixture([entry('nl'), entry('en'), entry('ja')]); await f.ui.findCatalogMatch();
@@ -87,6 +103,7 @@ test('multiple catalog translations default to English and load the selected lan
   select.value = '2';
   await f.nodes.find(node => node.textContent === 'Use selected translation').click();
   assert.equal(f.context.loaded.language, 'ja');
+  assert.equal(f.context.fullImport, true);
 });
 test('switching to search during a catalog download keeps the load button disabled and discards that result', async () => {
   const f = fixture([entry('en')]); await f.ui.findCatalogMatch();

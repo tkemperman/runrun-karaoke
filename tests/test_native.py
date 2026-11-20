@@ -185,6 +185,19 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(other.read_bytes(),b'other audio')
             self.assertEqual(receipt.read_text(),'{"taskId":"saved"}')
 
+    def test_audio_presence_is_read_only_and_rejects_nonfiles(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache=Path(folder)/'cache'
+            self.assertFalse(H.audio_cache_exists('F-iI4-BkwXg',cache))
+            self.assertFalse(cache.exists())
+            audio=H.audio_cache_path('F-iI4-BkwXg',cache)
+            audio.write_bytes(b'audio')
+            self.assertTrue(H.audio_cache_exists('F-iI4-BkwXg',cache))
+            self.assertEqual(audio.read_bytes(),b'audio')
+            audio.unlink(); audio.symlink_to(Path(folder)/'elsewhere')
+            self.assertFalse(H.audio_cache_exists('F-iI4-BkwXg',cache))
+            with self.assertRaises(ValueError):H.audio_cache_exists('../invalid',cache)
+
     def test_clear_audio_rejects_symlinked_cache_directory(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'target';target.mkdir(mode=0o700)

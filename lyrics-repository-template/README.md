@@ -3,7 +3,7 @@
 Set up your own public lyrics and translation repository for ルンルンKARAOKE.
 This template contains no lyrics.
 
-This template was reviewed with extension release 1.4.5. The security hardening in that release does not change project schema 4 or catalog schema 1, so existing repositories need no migration.
+This template was reviewed with extension release 1.5.0. Project schema 4 and catalog schema 1 are unchanged. Update scripts/core.js from this template before publishing manual kanji annotations above kana (reverse ruby), so the catalog validator accepts them.
 
 ## Setup
 
@@ -23,7 +23,7 @@ This template was reviewed with extension release 1.4.5. The security hardening 
 
    Settings save automatically when you leave a field. Keep the token private; never add it to the repository.
 
-5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish translation to GitHub**, review the repository, branch and file paths shown inside Settings, then choose **Confirm publication** to publish the current translation to its language file (such as en.json, fr.json or nl.json), preserving other language files. Each language file contains its translation and shared original lyrics, timing, furigana and display settings. **Cancel** leaves the repository unchanged. If you edit the project while reviewing, start publication again. The catalog Action starts only after a successful upload commit; simply opening the review does not trigger a run. After the repository's Action finishes, use **Find lyrics → Use lyrics translation from catalog** to load it. The generated catalog can also supply random videos to **Surprise Me** from this same repository.
+5. **Publish or load lyrics.** On YouTube, open the lyrics editor and expand **Lyrics repositories · GitHub**. Use **Publish to GitHub**, review the repository, branch and file paths shown inside Settings, then choose **Confirm publication** to publish the current translation to its language file (such as en.json, fr.json or nl.json), preserving other language files. Each language file contains its translation and shared original lyrics, timing, furigana and display settings. **Cancel** leaves the repository unchanged. If you edit the project while reviewing, start publication again. The catalog Action starts only after a successful upload commit; simply opening the review does not trigger a run. After the repository's Action finishes, use **Find lyrics → Use lyrics translation from catalog** to load it. The generated catalog can also supply random videos to **Surprise Me** from this same repository.
 
 The Action generates `index.json` from the project files. The extension searches that index by `videoId` and loads the recorded file path; it does not scan folder names. Renaming a YouTube video does not prevent existing projects from being found. The downloaded project’s `videoId` is also validated before loading.
 

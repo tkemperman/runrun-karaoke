@@ -51,9 +51,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       case "timing-cancel":
       case "timing-discard":
       case "timing-clear-audio":
+      case "timing-audio-status":
         data = await KaraokeNative.request(message);
         break;
       case "load-interface":
+        KaraokeMCP.connect(mcp.dispatch);
         if (sender.frameId && sender.frameId !== 0) throw new Error("Open karaoke in the main YouTube page.");
         for (const [file, symbol] of [["src/core.js", "KaraokeCore"], ["src/timing.js", "KaraokeTiming"], ["src/tutorial.js", "KaraokeTutorial"], ["src/content.js", "KaraokeUI"]]) {
           const [loaded] = await browser.tabs.executeScript(sender.tab.id, { code: `typeof ${symbol} !== "undefined"`, frameId: 0 });
@@ -252,3 +254,19 @@ browser.commands.onCommand.addListener(async command => {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id) browser.tabs.sendMessage(tab.id, { type }).catch(() => {});
 });
+const mcp = KaraokeMCP.create({
+  core: KaraokeCore, store: projectStore, tabs: browser.tabs,
+  settings: async () => {
+    const saved = (await browser.storage.local.get('translationSettings')).translationSettings || {};
+    return { language: saved.language || 'en' };
+  },
+  repository: {
+    preferences: async () => {
+      const { saved, preferences } = await repositoryPreferences();
+      return { source: preferences.repository, token: saved.token };
+    },
+    inspect: (target, project) => KaraokeRepositories.inspectBatch(target.source, target.token, project, project.videoTitle),
+    publish: (target, project, sha) => KaraokeRepositories.publishBatch(target.source, target.token, project, sha, project.videoTitle)
+  }
+});
+KaraokeMCP.connect(mcp.dispatch);

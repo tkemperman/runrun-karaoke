@@ -106,6 +106,17 @@ const KaraokeNative = (() => {
     if (message.type === "audioshake-settings") return settings();
     if (message.type === "save-audioshake-settings") return saveSettings(message);
     if (!/^[\w-]{11}$/.test(message.videoId)) throw new Error("Invalid video ID.");
+    if (message.type === "timing-audio-status") {
+      let timer;
+      try {
+        const response = await Promise.race([
+          browser.runtime.sendNativeMessage(host, { type: "audio-cache-status", videoId: message.videoId }),
+          new Promise((_, reject) => (timer = setTimeout(() => reject(new Error("Audio cache check timed out.")), 10000)))
+        ]);
+        if (response?.type !== "audio-cache-status" || typeof response.exists !== "boolean") throw new Error(response?.error || "Update the Linux helper to check cached audio.");
+        return { exists: response.exists };
+      } finally { clearTimeout(timer); }
+    }
     if (message.type === "timing-start") return launch(message);
     return serialized(message.videoId, async () => {
       const entry = active.get(message.videoId);

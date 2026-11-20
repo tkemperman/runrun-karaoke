@@ -142,6 +142,14 @@ def audio_cache_path(video_id, cache_dir=None, create=True):
     return folder / (video_id + ".mp3")
 
 
+def audio_cache_exists(video_id, cache_dir=None):
+    try:
+        info = audio_cache_path(video_id, cache_dir, create=False).lstat()
+        return stat.S_ISREG(info.st_mode)
+    except FileNotFoundError:
+        return False
+
+
 def clear_audio_cache(video_id, cache_dir=None):
     try:
         audio_cache_path(video_id, cache_dir, create=False).unlink()
@@ -437,6 +445,11 @@ def main():
         while message := read_message(sys.stdin.buffer):
             if message.get("type") == "status":
                 send({"type": "status", **status()})
+            elif message.get("type") == "audio-cache-status":
+                try:
+                    send({"type": "audio-cache-status", "exists": audio_cache_exists(message.get("videoId"))})
+                except (OSError, ValueError):
+                    send({"type": "error", "error": "Could not check cached audio for this video."})
             elif message.get("type") == "clear-audio-cache":
                 if thread and thread.is_alive():
                     send({"type": "error", "error": "Wait for the timing task to stop before removing audio."})
