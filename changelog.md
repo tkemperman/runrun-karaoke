@@ -1,5 +1,11 @@
 # Changelog
 
+## Development changes — 2026-11-26
+
+- Build only the public distribution, also used for local testing; remove the separate local packaging target.
+- After successful packaging, retain the three newest release ZIPs by numeric version and remove obsolete local variants. Preserve unrelated files and existing distributions when a build fails.
+- Require version bumps only for changes to add-on functionality relevant to users; packaging and other development-only changes keep the current version.
+
 ## 2.0.0 — Released 2026-11-25
 
 - Publish only the sweep color from display settings to GitHub, preserving lyrics, translations, furigana and PH timing. Keep every display preference in local storage and JSON backups.

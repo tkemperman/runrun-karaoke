@@ -222,7 +222,7 @@ Run `npm test` for the JavaScript tests, including search, translation/furigana,
 
 Run `npm run package` to create `dist/runrun-karaoke-2.0.0.zip`, an unsigned extension package. Packaging uses Python 3 and includes the manifest, runtime assets, LICENSE and privacy.md. The private developer controls and public interface use the same versioned runtime; developer mode only changes visibility. The packaging command does not sign or publish the add-on.
 
-Run `npm run package:local` to create `dist/runrun-karaoke-2.0.0-local.zip` for temporary Firefox testing. Its display version is `2.0.0-local` and its internal Firefox version is `2.0.0.1`, keeping it distinguishable from the public 2.0.0 package without changing source version metadata.
+Use the same public distribution for local testing; no separate local variant is built. After a successful build, packaging keeps only the three newest release ZIPs in `dist/`, ordered by numeric version, and removes older releases and obsolete `-local.zip` variants. Unrelated files are left untouched.
 
 ### Guided tutorial
 
