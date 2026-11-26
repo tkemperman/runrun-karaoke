@@ -1,8 +1,9 @@
-/* Optional local MCP bridge. No keys, arbitrary storage, scripts or paid APIs are exposed. */
+/* Optional local MCP bridge. Keys and arbitrary storage/scripts stay private. */
 (function (root) {
   'use strict';
-  function create({ core, store, tabs, settings, repository }) {
+  function create({ core, store, tabs, settings, repository, translate }) {
     const normalize = project => core.exportProject(core.singleTranslation(project));
+    const translationJobs = new Map();
     async function contexts() {
       const result = [];
       for (const tab of await tabs.query({ url: 'https://www.youtube.com/*' })) {
@@ -40,6 +41,58 @@
       switch (message.operation) {
         case 'list': return contexts();
         case 'read': return read(a.videoId);
+        case 'start-translation': {
+          const before = await read(a.videoId);
+          if (!before.hasLyrics) throw new Error('Add original lyrics before translating.');
+          for (const key of ['includeFurigana', 'convertRomaji']) {
+            if (a[key] !== undefined && typeof a[key] !== 'boolean') throw new Error(`Invalid ${key} option.`);
+          }
+          const preferences = await settings();
+          const existing = translationJobs.get(a.videoId);
+          if (existing?.status === 'running') return { ...existing };
+          const job = { jobId: crypto.randomUUID(), videoId: a.videoId, status: 'running', revision: before.revision,
+            model: preferences.model, language: before.targetLanguage,
+            includeFurigana: a.includeFurigana ?? preferences.includeFurigana ?? true,
+            convertRomaji: a.convertRomaji ?? preferences.convertRomaji ?? true };
+          translationJobs.set(a.videoId, job);
+          // Return immediately: AI requests can outlast the native bridge timeout.
+          Promise.resolve().then(async () => {
+            const result = await translate({ model: job.model, language: job.language,
+              includeFurigana: job.includeFurigana, convertRomaji: job.convertRomaji,
+              lines: before.project.blocks.map(({ id, text }) => ({ id, text })) });
+            const current = await read(a.videoId);
+            if (current.revision !== before.revision || JSON.stringify(current.project) !== JSON.stringify(before.project)) {
+              throw new Error('Project changed during translation. Result discarded.');
+            }
+            const proposal = structuredClone(before.project), byId = new Map(result.lines.map(row => [row.id, row]));
+            if (result.lines.length !== proposal.blocks.length || byId.size !== proposal.blocks.length) throw new Error('Incomplete AI result.');
+            for (const row of proposal.blocks) {
+              const translated = byId.get(row.id);
+              if (!translated || typeof translated.text !== 'string' || typeof translated.translation !== 'string') throw new Error('Invalid AI result.');
+              if (translated.text !== row.text) { delete row.furigana; delete row.sweep; }
+              row.text = translated.text;
+              row.translations = { [job.language]: translated.translation };
+              if (job.includeFurigana) {
+                core.validateFurigana(row.text, translated.furigana);
+                row.furigana = translated.furigana;
+              }
+            }
+            proposal.originalLanguage = result.originalLanguage;
+            if (job.includeFurigana) proposal.furiganaEnabled = true;
+            job.project = normalize(proposal);
+            job.status = 'completed';
+          }).catch(error => {
+            job.status = 'error'; job.error = error.message;
+            if (error.furiganaDetails) job.furiganaDetails = error.furiganaDetails;
+          });
+          return { ...job };
+        }
+        case 'translation-status': {
+          if (!/^[\w-]{11}$/.test(a.videoId)) throw new Error('Invalid video ID.');
+          const job = translationJobs.get(a.videoId);
+          if (!job || job.jobId !== a.jobId) throw new Error('Translation job unavailable. The extension may have reloaded.');
+          return { ...job };
+        }
         case 'validate': return normalize(a.project);
         case 'apply': {
           const before = await read(a.project.videoId);

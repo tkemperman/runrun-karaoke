@@ -13,6 +13,8 @@ function project() {
   p.artist = 'Example'; p.blocks = [C.block('海', 1.25, 3)];
   p.blocks[0].translations.en = 'Sea'; p.blocks[0].furigana = [['海', 'うみ']];
   p.furiganaEnabled = true; p.offset = 0.125;
+  p.blocks[0].sweep = [{text: '海', start: 1.25, end: 3}];
+  Object.assign(p.display, {fontSize: 45, translationFontSize: 25, position: 30, translationPosition: 20, sweepColor: '#ff0099', captionGap: 2});
   return p;
 }
 function mock(t, responses) {
@@ -73,7 +75,11 @@ test('new Unicode projects publish once, exclude extra metadata, and use authent
   assert.equal(body.branch,'main'); assert.equal(body.sha,undefined);
   const decoded = Buffer.from(body.content,'base64').toString('utf8');
   assert.ok(!decoded.includes('accidental-secret'));
-  assert.deepEqual(JSON.parse(decoded),{...R.cleanProject(p), videoTitle: 'Live 海の歌'});
+  const expected = {...R.cleanProject(p), videoTitle: 'Live 海の歌'};
+  expected.display = {sweepColor: '#ff0099'};
+  assert.deepEqual(JSON.parse(decoded), expected);
+  assert.equal(p.display.fontSize, 45);
+  assert.deepEqual(C.exportProject(p).display, p.display);
 });
 test('updates carry the reviewed SHA; conflicts and API errors never expose response bodies', async t => {
   const sha = 'a'.repeat(40), p = project();
@@ -228,7 +234,18 @@ test('publication writes only the current language using the existing tree',asyn
   const treeBody=JSON.parse(calls[4].options.body);assert.equal(treeBody.tree.length,1);
   assert.equal(treeBody.base_tree,tree);
   assert.match(treeBody.tree[0].path,/\/en\.json$/);
-  for(const item of treeBody.tree){const copy=JSON.parse(item.content);assert.deepEqual(Object.keys(copy.blocks[0].translations),[copy.translationLanguage]);assert.deepEqual(copy.display,p.display);}
+  for(const item of treeBody.tree){const copy=JSON.parse(item.content);assert.deepEqual(Object.keys(copy.blocks[0].translations),[copy.translationLanguage]);
+    const expectedDisplay = {sweepColor: '#ff0099'};
+    assert.deepEqual(copy.display,expectedDisplay);
+    assert.deepEqual(copy.blocks[0].sweep,p.blocks[0].sweep);
+    const restored = C.validate(copy);
+    assert.equal(restored.display.fontSize,C.displayDefaults().fontSize);
+    assert.equal(restored.display.position,C.displayDefaults().position);
+    assert.deepEqual(restored.display,{...C.displayDefaults(),sweepColor: '#ff0099'});
+    assert.deepEqual(restored.blocks[0].sweep,p.blocks[0].sweep);
+  }
+  assert.deepEqual(C.exportProject(p).display,p.display);
+  assert.equal(p.display.fontSize,45); assert.equal(p.display.position,30);
   assert.equal(calls.filter(c=>c.url.endsWith('/git/commits')&&c.options.method==='POST').length,1);
   assert.deepEqual(JSON.parse(calls.at(-1).options.body),{sha:commit,force:false});
 });

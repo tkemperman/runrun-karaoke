@@ -13,7 +13,12 @@ LIMIT = 950_000
 
 
 def directory():
-    path = Path(os.environ.get('XDG_RUNTIME_DIR', tempfile.gettempdir())) / f'runrun-karaoke-mcp-{os.getuid()}'
+    # Desktop Firefox has XDG_RUNTIME_DIR; an MCP client launched elsewhere may not.
+    # Resolve the same per-user runtime directory in both processes on Linux.
+    runtime = Path(f'/run/user/{os.getuid()}')
+    if not runtime.is_dir():
+        runtime = Path(tempfile.gettempdir())
+    path = Path(os.environ.get('XDG_RUNTIME_DIR') or runtime) / f'runrun-karaoke-mcp-{os.getuid()}'
     path.mkdir(mode=0o700, exist_ok=True)
     info = path.lstat()
     if path.is_symlink() or not path.is_dir() or info.st_uid != os.getuid() or info.st_mode & 0o077:

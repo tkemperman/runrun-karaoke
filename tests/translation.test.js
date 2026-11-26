@@ -113,7 +113,11 @@ test('AI furigana sends the complete context, validates segments and maps reorde
     for (const text of ['あの海', '一つ', '𠮷', '々']) assert.equal(pattern.test(text), false);
     for (const text of ['あの', 'カナ', 'Hello', '！ ']) assert.equal(pattern.test(text), true);
     const annotated = variants.find(v => v.properties.reading.type === 'string');
-    assert.equal(new RegExp(annotated.properties.reading.pattern).test(' '), false);
+    const kanaPattern = new RegExp(annotated.properties.reading.pattern, 'u');
+    for (const value of ['', ' ', 'うみ！', 'umi', '海', 'うみ(umi)', 'うみ。']) assert.equal(kanaPattern.test(value), false, value);
+    for (const value of ['うみ', 'スーパー', 'ジュ・テーム', 'ｶﾀｶﾅ', ' うみ ']) assert.equal(kanaPattern.test(value), true, value);
+    assert.equal(annotated.properties.reading.maxLength, 1000);
+    for (const variant of variants) assert.equal(variant.properties.text.minLength, 1);
     return { ok: true, json: async () => wire(response(readings), japanese) };
   });
   assert.deepEqual(result.map(row => row.id), ['a', 'b', 'c']);
@@ -253,4 +257,21 @@ test('large requests constrain IDs without exceeding the Structured Outputs enum
     for (const value of ['0', '01', '1002', 'saved-1']) assert.equal(pattern.test(value), false);
     return { ok: true, json: async () => translationResponse(requestLines(original).map(row => ({ ...row, translation: null })), 'en') };
   });
+});
+
+test('furigana errors identify original line numbers and expose only the failing segments for diagnosis', () => {
+  const original = [{ id: 'first', text: '海！' }, { id: 'second', text: '空' }];
+  for (const [segments, reason] of [
+    [[{ text: '海！', reading: 'うみ！' }], /non-kana/],
+    [[{ text: '海', reading: 'うみ' }], /do not exactly match/],
+    [[{ text: '', reading: null }, { text: '海！', reading: 'うみ' }], /empty or invalid/]
+  ]) {
+    const payload = response([{ id: 'second', segments: [{ text: '空', reading: 'そら' }] }, { id: 'first', segments }]);
+    assert.throws(() => T.parseFurigana(payload, original), error => {
+      assert.match(error.message, /line 1:/); assert.match(error.message, reason);
+      assert.match(error.message, /Nothing was changed/);
+      assert.deepEqual(error.furiganaDetails, { line: 1, text: '海！', segments });
+      return true;
+    });
+  }
 });

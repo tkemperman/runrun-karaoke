@@ -41,6 +41,7 @@ function fixture() {
       if (message.type === 'repository-delete-inspect') return { file: message.file, sha: 'reviewed-file-sha', languages: context.reviewLanguages || ['en'] };
       if (message.type === "repository-inspect") return {
         sha: "reviewed-revision", file: "translations/example/en.json",
+        files: [{ language: 'en', file: 'translations/example/en.json', sha: context.fileExists === false ? null : 'existing-file-sha' }],
         target: { repo: "example/catalog", branch: "main" }
       };
       if (message.type === "repository-publish" && context.uploadError) throw Error(context.uploadError);
@@ -61,6 +62,15 @@ test("publication review and cancellation do not upload", async () => {
   await f.click("Cancel");
   assert.equal(f.uploads().length, 0);
   assert.match(f.statuses.at(-1), /cancelled/);
+});
+test('replacement warning depends on the translation file, not the existing branch revision', async () => {
+  for (const fileExists of [false, true]) {
+    const f = fixture(); f.context.fileExists = fileExists;
+    await f.click('Publish to GitHub');
+    assert.equal(f.nodes.find(node => node.tag === 'h3').textContent,
+      fileExists ? 'Replace the existing GitHub file?' : 'Publish this project on GitHub?');
+    assert.equal(f.uploads().length, 0);
+  }
 });
 test("explicit confirmation publishes the reviewed project and revision", async () => {
   const f = fixture(); await f.click("Publish to GitHub");

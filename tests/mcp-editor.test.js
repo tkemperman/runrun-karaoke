@@ -12,7 +12,7 @@ function fixture() {
   const context = {project, C, videoId: project.videoId, generation: 1, storageState: {revision:4}, saveQueue:Promise.resolve(),
     selected:0, root:{activeElement:null,addEventListener:(type,fn)=>{events[type]=fn;}},
     browser:{runtime:{onMessage:{addListener:fn=>{context.receive=fn;}}}},
-    requireProject(){},video:()=>({duration:30}),refresh(){context.refreshed=true;},notify(){},fail(error){context.failure=error.message;},findCatalogMatch(){}
+    hasPendingSweepEdits(){return !!context.pendingSweep;},requireProject(){},video:()=>({duration:30}),refresh(){context.refreshed=true;},notify(){},fail(error){context.failure=error.message;},findCatalogMatch(){}
   };
   vm.runInNewContext(handler,context);
   return {context,events};
@@ -33,4 +33,12 @@ test('MCP preserves unfinished form input and conflicting edits; accepted apply 
   assert.match((await c.receive(message)).error,/Local editor changed/);assert.equal(c.project.blocks[0].text,'Local edit');
   c.project=structuredClone(previous);
   assert.equal((await c.receive(message)).applied,true);assert.equal(c.project.blocks[0].text,'海');assert.equal(c.project.blocks[0].translations.en,'Sea');assert.equal(c.storageState.revision,5);
+});
+
+test('MCP blocks unapplied sweep drafts even after their input loses focus',async()=>{
+  const {context:c}=fixture();c.pendingSweep=true;
+  assert.match((await c.receive({type:'mcp-snapshot',videoId:c.videoId})).error,/Apply or reset/);
+  const message={type:'mcp-reload',videoId:c.videoId,revision:4,previous:C.exportProject(c.project),state:{revision:5,project:c.project}};
+  assert.match((await c.receive(message)).error,/Apply or reset/);assert.equal(c.storageState.revision,4);
+  c.pendingSweep=false;assert.equal((await c.receive({type:'mcp-snapshot',videoId:c.videoId})).revision,4);
 });

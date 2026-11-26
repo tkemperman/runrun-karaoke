@@ -122,3 +122,12 @@ test('legacy local projects use their selected translation without changing the 
   assert.equal(saved.project.translationLanguage,'nl');
   assert.deepEqual(data['project:abcdefghijk'].blocks[0].translations,{nl:'Nederlands'});
 });
+
+test('schema migration preserves pristine catalog state while still detecting real edits', async () => {
+  const p=C.exportProject(project());p.schemaVersion=4;delete p.display.sweepColor;
+  const initial={'project:abcdefghijk':p,'projectState:abcdefghijk':{revision:3,dirty:false,baseline:JSON.stringify(p)}};
+  const {store}=fixture(initial);const state=await store.read(p.videoId);
+  assert.equal(state.project.schemaVersion,5);assert.equal(state.dirty,false);
+  initial['project:abcdefghijk'].blocks[0].text='Changed';
+  assert.equal((await fixture(initial).store.read(p.videoId)).dirty,true);
+});

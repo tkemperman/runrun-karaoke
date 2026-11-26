@@ -149,7 +149,7 @@ test('legacy projects retain only the last source without changing the input', (
   const result = C.validate(p);
   assert.deepEqual(result.source, { provider: 'lrclib', url: p.sources[1].url });
   assert.equal(result.sources, undefined);
-  assert.equal(result.schemaVersion, 4);
+  assert.equal(result.schemaVersion, 5);
   assert.deepEqual(result.blocks, p.blocks);
   assert.equal(JSON.stringify(p), before);
   assert.deepEqual(C.validate(JSON.parse(JSON.stringify(result))), result);

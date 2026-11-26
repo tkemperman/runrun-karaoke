@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.0 — Released 2026-11-25
+
+- Publish only the sweep color from display settings to GitHub, preserving lyrics, translations, furigana and PH timing. Keep every display preference in local storage and JSON backups.
+- Add a full progressive highlighting editor with editable text/Start/End rows, Add/Remove, Apply/Reset, draft preservation, validation and per-segment seeking.
+- Add separate per-video original lyrics and translation color pickers; use a slider for caption spacing.
+- Add a per-video spacing slider (0–30% of video height): leftmost/default is the tightest text fit, with no inactive slider range. Older negative values migrate to 0%. Use one transparent caption-background layer to prevent overlap darkening.
+- Default progressive highlighting to pink and add a per-video Highlight color picker under Display & timing.
+- Add progressive karaoke highlighting from per-word or syllable timing, with ruby support and playback-clock synchronization.
+- Add MCP `stage_sweep` / `apply_sweep` and the `add-sweep` skill, reusing cached track downloads and creating missing subtitles.
+- Project schema 5 preserves sweep in JSON and catalog data; older projects migrate. Text edits and replacement timing invalidate stale sweep data.
+
+- Align progressive timing buttons with the Start/End input fields.
+- Validation: 232 JavaScript tests, 38 Python tests and JavaScript/Python/shell syntax checks pass. Firefox checks cover the highlighting renderer, caption spacing, and creating/editing/removing segment timing. On November 26, the user confirmed reviewing the updated tutorial and authorized committing without repeating the walkthrough. No paid generation or add-on lint run was performed during this release preparation.
+- Follow-up validation on November 26: applied partial sweep through MCP and checked playback rendering; updated the live lyrics catalog validators for schema 5 and verified its successful GitHub Action. Rebuilt and verified both distribution archives before committing.
+- Build and verify both unsigned 2.0.0 distributions: ZIP integrity, version metadata, exact runtime/privacy files and nested native-helper contents. No signing, upload or publication performed.
+
+## 1.5.2 — Released 2026-11-25
+
+- Add asynchronous AI translation through MCP using saved OpenAI settings and the project's target language, with optional furigana and romaji conversion. Reuse running jobs, report progress, and return proposed projects for review before applying; reject stale or incomplete results.
+- Tighten AI furigana output constraints and validation. Reject empty segments, mismatched lyric text and non-kana readings; report the affected line and recovery guidance without changing existing work.
+- Fix Linux MCP connection discovery when the client has no XDG_RUNTIME_DIR by using the desktop user's runtime directory when available.
+- Correct GitHub publication confirmation to detect existing destination files and show the replacement prompt.
+- Validation: 209 JavaScript tests, 31 Python tests and JavaScript/Python/shell syntax checks pass. No live paid API requests, authenticated GitHub writes, browser walkthrough or add-on lint run were performed for this release.
+- Build and verify both unsigned 1.5.2 distributions, including version metadata, ZIP integrity and exact runtime, privacy policy and native-helper contents. No signing, upload or publication performed.
+
 ## 1.5.0 — Released 2026-11-20
 
 - Add optional local MCP integration and the discoverable fix-lyrics skill. Inspect existing lyrics, listen to cached/downloaded audio, consult LRCLIB, and stage a timestamped original/new text-and-translation table. Apply only after review; publishing lyrics and cleaning up audio each require separate permission. Preserve recovery JSON and reject stale project/repository revisions.
@@ -226,9 +251,9 @@ Release does not imply completion of every acceptance check in [agents.md](agent
 - Complete Firefox acceptance coverage, including all display modes, shortcuts, and playback scenarios beyond the Firefox/Linux checks recorded for 1.4.0.
 - Validate timing for the Japanese live reference performance with English translations.
 
-## 2.0.0 — Planned
+## Future audio analysis — Unscheduled
 
-Word or Japanese text segment highlighting and further audio-analysis options, beyond the AudioShake line timing delivered in 1.4.0.
+Built-in automatic word alignment and further audio-analysis options, beyond the AudioShake line timing and the progressive highlighting/editor delivered in 2.0.0.
 
 ### Scope
 
@@ -236,13 +261,11 @@ Word or Japanese text segment highlighting and further audio-analysis options, b
 - Alignment of existing lyrics with the actual performance.
 - Line and segment timestamps, with uncertain passages flagged for review.
 - Analysis progress, cancellation, error handling, and manual correction.
-- Segment highlighting with line-based fallback.
 - Preservation of translation mappings and existing manual edits.
-- Storage migrations and compatibility with version 1.0.0 projects.
 
-### Release gate
+### Validation goals
 
-Complete the version 2.0.0 acceptance criteria in [agents.md](agents.md). Measure alignment accuracy against manually annotated passages and establish a quality threshold after the prototype. Verify that cancellation, failure, and migration preserve existing work.
+Complete the future automatic audio-analysis acceptance criteria in [agents.md](agents.md). Measure alignment accuracy against manually annotated passages and establish a quality threshold after the prototype. Verify that cancellation, failure, and migration preserve existing work.
 
 ## Release maintenance
 

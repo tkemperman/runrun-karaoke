@@ -46,6 +46,9 @@
     #privacy-toolbar button, #about-toolbar button { flex-shrink:0; }
     #privacy-text, #about-text { min-height:0; overflow:auto; overscroll-behavior:contain; padding-top:8px; }
     header, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } header { justify-content: space-between; } h2 { margin: 0; font-size: 20px; } p { margin: 8px 0; } .muted { color: #b4c0d4; font-size: 12px; }
+    .sweep-segment { align-items: flex-end; }
+    .sweep-segment label { margin: 0; }
+    .sweep-segment input { font-size: 14px; }
     .editor-toolbar { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; padding: 10px 12px; border: 1px solid #41516d; border-radius: 8px; }
     .editor-toolbar p { flex: 1; min-width: 0; margin: 0; }
     .editor-toolbar button { flex-shrink: 0; margin-inline-start: auto; }
@@ -64,10 +67,11 @@
     .muted.warning { color: #fef08a; background: #422f12; border: 1px solid #eab308; border-radius: 7px; padding: 10px 12px; }
     #rows { display: grid; gap: 12px; } .block { padding: 10px; border: 1px solid #41516d; border-radius: 8px; } #panel.tutorial-active .block.selected { border-color: #67e8f9; } .block label { font-size: 12px; }
     #overlay { position: absolute; left: 5%; right: 5%; bottom: 13%; text-align: center; z-index: 60; pointer-events: none; font-family: system-ui, sans-serif; text-shadow: 0 2px 5px #000, 0 0 8px #000; }
-    #caption { display: inline-block; max-width: 100%; background: #07111bd9; border-radius: 10px; padding: 10px 20px; }
+    #caption { display: inline-block; max-width: 100%; border-radius: 10px; padding: 10px 20px; }
     ruby { ruby-position: over; } rt { font-size: .5em; font-weight: 400; line-height: 1; }
+    .sweep-glyph { color: transparent; background: linear-gradient(to right, var(--sweep-color, #f472b6) var(--sweep, 0%), var(--lyrics-color, #ffffff) var(--sweep, 0%)); background-clip: text; text-shadow: none; }
     #original:has(ruby), #next:has(ruby) { line-height: 2; }
-    #original { color: #fff; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; } #translated { color: #a5f3fc; font-size: .67em; white-space: pre-wrap; margin-top: 5px; } #next { color: #cbd5e1; font-size: .5em; margin-top: 5px; }
+    #original { color: var(--lyrics-color, #ffffff); font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; } #translated { color: #a5f3fc; font-size: .67em; white-space: pre-wrap; margin-top: 5px; } #next { color: var(--lyrics-color, #ffffff); opacity: .8; font-size: .5em; margin-top: 5px; }
   `;
   root.append(style);
   function el(tag, text, parent, attrs = {}) {
@@ -353,6 +357,10 @@
   const position = input("Original distance above bottom (%)", display, "13", "range"); position.min = "0"; position.max = "90";
   const translationSize = input("Translation text size", display, "23", "range"); translationSize.min = "12"; translationSize.max = "80";
   const translationPosition = input("Translation distance above bottom (%)", display, "8", "range"); translationPosition.min = "0"; translationPosition.max = "90";
+  const captionGap = input("Lyrics–translation spacing (%)", display, "0", "range");
+  captionGap.min = "0"; captionGap.max = "30"; captionGap.step = "0.5";
+
+  el("p", "Extra space between the caption text, as a percentage of the video height. 0% is the closest fit and the default. The lower caption anchors the pair; the upper caption follows the spacing.", display, { class: "muted" });
   function checkbox(text, parent, checked = true) {
     const label = el('label', null, parent, { class: 'checkbox-row' });
     const box = el('input', null, label, { type: 'checkbox' }); box.checked = checked;
@@ -361,7 +369,12 @@
   const showOriginal = checkbox('Show original lyrics', display);
   const showTranslation = checkbox('Show translation', display);
   const showNext = checkbox('Show next line', display, false);
-  const displayFields = { fontSize, position, translationFontSize: translationSize, translationPosition, showOriginal, showTranslation, showNext };
+  const lyricsColor = input("Original lyrics color", display, C.displayDefaults().lyricsColor, "color");
+  const translationColor = input("Translation color", display, C.displayDefaults().translationColor, "color");
+  const sweepColor = input("Highlight color", display, C.displayDefaults().sweepColor, "color");
+  for (const field of [lyricsColor, translationColor, sweepColor]) field.style.cssText = "width:64px;height:36px;padding:3px;cursor:pointer";
+  el("p", "Colors sung words progressively when this song has sweep timing. Saved for this video.", display, { class: "muted" });
+  const displayFields = { captionGap, lyricsColor, translationColor, sweepColor, fontSize, position, translationFontSize: translationSize, translationPosition, showOriginal, showTranslation, showNext };
   function refreshDisplay() {
     const settings = project?.display || C.displayDefaults();
     for (const [key, field] of Object.entries(displayFields)) {
@@ -370,7 +383,10 @@
   }
   for (const field of Object.values(displayFields)) field.addEventListener('change', () => {
     requireProject();
-    project.display = Object.fromEntries(Object.entries(displayFields).map(([key, field]) => [key, field.type === 'checkbox' ? field.checked : Number(field.value)]));
+    if (captionGap.value === "" || !Number.isFinite(Number(captionGap.value)) || Number(captionGap.value) < 0 || Number(captionGap.value) > 30) {
+      refreshDisplay(); notify("Enter caption spacing between 0% and 30%.", true); return;
+    }
+    project.display = Object.fromEntries(Object.entries(displayFields).map(([key, field]) => [key, field.type === 'checkbox' ? field.checked : field.type === 'color' ? field.value : Number(field.value)]));
     save();
   });
   const furiganaLabel = el("label", null, display, { class: "checkbox-row" });
@@ -808,7 +824,7 @@
         if (withReadings) C.validateFurigana(result.text, result.furigana);
       }
       for (const row of project.blocks) {
-        if (row.text !== byId.get(row.id).text) delete row.furigana;
+        if (row.text !== byId.get(row.id).text) { delete row.furigana; delete row.sweep; }
         row.text = byId.get(row.id).text;
         row.translations = { [language]: byId.get(row.id).translation };
         if (withReadings) row.furigana = byId.get(row.id).furigana;
@@ -1044,7 +1060,7 @@
       const destination = await request({ type: "repository-inspect", project: snapshot, videoTitle });
       if (generation !== currentGeneration || currentVideoTitle() !== videoTitle || JSON.stringify(project) !== JSON.stringify(snapshot)) throw new Error("Project changed. Start publishing again.");
       publicationReview.replaceChildren();
-      el("h3", destination.sha ? "Replace the existing GitHub file?" : "Publish this project on GitHub?", publicationReview);
+      el("h3", destination.files.some(file => file.sha) ? "Replace the existing GitHub file?" : "Publish this project on GitHub?", publicationReview);
       el("p", `${destination.target.repo} · ${destination.target.branch}`, publicationReview);
       el("p", destination.file, publicationReview, { style: "overflow-wrap:anywhere" });
       el("p", "This publishes the current translation with its lyrics, timing, furigana and display settings in one commit. Other remote languages are kept.", publicationReview);
@@ -1171,11 +1187,11 @@
     { id: "search", chapter: "Basics", title: "Find your song", target: () => lyricsSearchPanel.hidden ? searchChoice : query, text: "Choose Search for lyrics to search by song or artist. The addon tries LRCLIB first, then Genius if no lyrics are found. After searching, choose a result and click Use selected lyrics. If nothing matches, No results found appears. This is an alternative to loading a catalog translation." },
     { id: "languages", chapter: "Basics", title: "Choose a translation language", target: () => editorLanguage, text: "Enter a language code such as en, fr or nl. This keeps the current text; Translate all lines replaces it with a new translation after confirmation. Each song has one local translation. Lyrics language identifies the original text. English is the default; your last choice is remembered." },
     { id: "dictionary", chapter: "Basics", title: "Add furigana", target: () => generateFurigana, text: "Furigana are small kana readings above kanji. Generate them with the dictionary; Show furigana is enabled automatically. The dictionaries download once; lyrics stay on your computer. Check the readings against the singing." },
-    { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics or the translation in Line editor. Changes save locally. Changing original text clears that line’s furigana, so generate or correct its readings afterward." },
+    { id: "edit", chapter: "Basics", title: "Correct lyrics", target: () => rows.querySelector(".block.selected textarea, .block textarea") || editor, text: "Edit Original lyrics or the translation in Line editor. Changes save locally. Progressive highlighting lets you add or remove timing rows and edit their text, Start and End. Apply timing saves the rows together; Reset changes restores saved timing. Changing original text clears that line’s sweep and furigana, so generate or correct them afterward." },
     { id: "readings", chapter: "Basics", title: "Correct readings", target: () => rows.querySelector(".block.selected .furigana-editor") || rows.querySelector(".furigana-editor") || generateFurigana, text: "Open Edit furigana readings to correct a word’s kana. Listen to the singer to choose the right reading. Changes save automatically. Generate furigana first if no readings are shown." },
     { id: "global-timing", chapter: "Basics", title: "Align the whole song", target: () => startAt, text: "Start at sets when the first lyric begins, for example 0:33. Or select a line and use Sync with video position. Shifts affecting other lines ask for confirmation. The cross inside Start at sets the first lyric to 0:00 and shifts all timed lyrics by the same amount." },
     { id: "line-timing", chapter: "Basics", title: "Time individual lines", target: () => rows.querySelector(".block.selected .row + .row, .block .row + .row") || editor, text: "Enter Start and End as minutes:seconds, such as 3:32.250. Changing a timed Start also shifts later lines after confirmation. End changes only this line. A blank End lasts until the next timed line." },
-    { id: "play", chapter: "Basics", title: "Ready to sing", target: () => fontSize, text: "Set size and position separately for the original and translation, or hide either one. These settings save with the project. Opening Settings enables Karaoke; closing it leaves Karaoke on. Use the Karaoke button or Alt+K to toggle it." },
+    { id: "play", chapter: "Basics", title: "Ready to sing", target: () => fontSize, text: "Set size and position separately for the original and translation, or hide either one. Lyrics–translation spacing adds space between the caption text. The leftmost value, 0%, is the closest fit and the default. The lower caption anchors the pair; the upper caption follows the spacing. Choose colors for original lyrics, translation and highlighting. Highlight color controls the sweep for songs with word timing; pink is the default. These settings save with the project. Opening Settings enables Karaoke; closing it leaves Karaoke on. Use the Karaoke button or Alt+K to toggle it." },
     { id: "ai", chapter: "Advanced", title: "AI features", target: () => automatic.querySelector("summary"), text: "OpenAI translates text and can add furigana. AudioShake recognizes and times lyrics from audio. Each needs its own API key and charges for requests. Starting without lyrics? Generate timed lyrics, apply the result, then translate: both languages use the same timing." },
     { id: "ai-furigana", chapter: "Advanced", title: "AI features · Translation and furigana", target: () => apiKey, text: "Choose a model and translation language, then click Translate all lines. The source language is detected automatically. Generate furigana and Convert Japanese romaji to kanji/kana are on by default; turn either off if unwanted. Existing work asks for confirmation before replacement. Lines already in the target language need no translation. OpenAI receives text, not audio." },
     { id: "ai-audio-setup", chapter: "Advanced", title: "AI features · Audio setup", target: () => helperSection.querySelector("summary"), text: "Audio timing needs the Linux audio helper. Follow Installation instructions and click Check again. Enter your AudioShake key in AI features; leave Audio language on Auto for detection. Videos up to 45 minutes are supported; livestreams are not." },
@@ -1264,6 +1280,87 @@
     selected = index;
     renderRows(); save();
   }
+  const sweepDrafts = new Map();
+  function hasPendingSweepEdits() {
+    return !!project?.blocks.some(row => sweepDrafts.get(`${project.videoId}:${row.id}`)?.dirty);
+  }
+  function renderSweepEditor(parent, row) {
+    const key = `${project.videoId}:${row.id}`;
+    const fingerprint = () => JSON.stringify([row.text, row.start, row.end, row.sweep || null, project.offset]);
+    const savedDraft = () => ({ base: fingerprint(), dirty: false, parts: (row.sweep || []).map(part => ({
+      text: part.text, start: formatTime(part.start + project.offset), end: formatTime(part.end + project.offset)
+    })) });
+    let draft = sweepDrafts.get(key);
+    if (!draft || (!draft.dirty && draft.base !== fingerprint())) {
+      draft = savedDraft(); sweepDrafts.set(key, draft);
+    }
+    const section = el("details", null, parent, { class: "sweep-editor" });
+    section.open = draft.dirty;
+    const heading = el("summary", "Progressive highlighting", section);
+    el("p", "Add a timing row for each word or segment. Together, the segment texts must match Original lyrics exactly, including spaces. Start and End use video time. Apply timing saves all rows together; removing every row turns highlighting off.", section, { class: "muted" });
+    const status = el("p", "", section, { role: "status", class: "muted" });
+    const segments = el("div", null, section);
+    const actions = el("div", null, section, { class: "row" });
+    const update = () => {
+      heading.textContent = `Progressive highlighting · ${draft.parts.length} timing rows${draft.dirty ? " · unsaved" : ""}`;
+      apply.disabled = reset.disabled = !draft.dirty;
+      status.hidden = !draft.dirty;
+      status.textContent = draft.dirty ? "Unsaved timing changes. Choose Apply timing to save or Reset changes to start over." : "";
+    };
+    const changed = () => { draft.dirty = true; update(); };
+    const add = index => {
+      draft.parts.splice(index, 0, { text: "", start: "", end: "" });
+      changed(); draw(); section.open = true;
+    };
+    button("Add timing row", actions, () => add(draft.parts.length));
+    const apply = button("Apply timing", actions, () => {
+      try {
+        if (draft.base !== fingerprint()) throw new Error("The lyrics or line timing changed while editing these rows. Reset changes to load the current timing before trying again.");
+        const sweep = draft.parts.map(part => {
+          const start = parseLineTime(part.start), end = parseLineTime(part.end);
+          if (start === null || end === null || start < 0 || end < 0) throw new Error("Every timing row needs non-negative Start and End video times, for example 0:32.250.");
+          return { text: part.text, start: Number((start - project.offset).toFixed(3)), end: Number((end - project.offset).toFixed(3)) };
+        });
+        if (sweep.length) C.validateSweep({ ...row, sweep });
+        const different = JSON.stringify(sweep) !== JSON.stringify(row.sweep || []);
+        if (sweep.length) row.sweep = sweep; else delete row.sweep;
+        draft = savedDraft(); sweepDrafts.set(key, draft);
+        update(); draw();
+        if (different) save();
+      } catch (error) { status.textContent = error.message; status.hidden = false; }
+    });
+    const reset = button("Reset changes", actions, () => {
+      draft = savedDraft(); sweepDrafts.set(key, draft); update(); draw();
+    });
+    function draw() {
+      segments.replaceChildren();
+      if (!draft.parts.length) el("p", "No timing rows. Add a row to start defining progressive highlighting for this line.", segments, { class: "muted" });
+      draft.parts.forEach((part, partIndex) => {
+        const controls = el("div", null, segments, { class: "row sweep-segment", style: "margin:8px 0;padding:8px;border:1px solid #41516d;border-radius:6px" });
+        const textBox = el("div", null, controls, { style: "flex:1 1 100%;min-width:0" });
+        const text = input("Segment text", textBox, part.text);
+        text.setAttribute("aria-label", `Text of timing row ${partIndex + 1}`);
+        text.addEventListener("input", () => { part.text = text.value; changed(); });
+        for (const fieldName of ["start", "end"]) {
+          const field = input(fieldName === "start" ? "Start" : "End", controls, part[fieldName]);
+          field.placeholder = "0:32.250"; field.style.width = "110px";
+          field.setAttribute("aria-label", `${fieldName === "start" ? "Start" : "End"} of timing row ${partIndex + 1}`);
+          field.addEventListener("input", () => { part[fieldName] = field.value; changed(); });
+        }
+        button("Jump to", controls, () => {
+          try {
+            const seconds = parseLineTime(part.start), media = video();
+            if (seconds === null || seconds < 0 || !media) throw new Error("Enter a valid Start time and open a video first.");
+            media.currentTime = seconds;
+          } catch (error) { status.textContent = error.message; status.hidden = false; }
+        });
+        button("Add after", controls, () => add(partIndex + 1));
+        button("Remove", controls, () => { draft.parts.splice(partIndex, 1); changed(); draw(); });
+      });
+    }
+    update(); draw();
+    return section;
+  }
   function renderRows() {
     clearLines.hidden = !project?.blocks.length;
     refreshLanguages();
@@ -1285,7 +1382,7 @@
         const field = input(key === "start" ? "Start" : "End", times, row[key] === null ? "" : formatTime(row[key] + project.offset));
         field.placeholder = "0:32.250";
         field.style.width = "110px";
-        field.addEventListener("change", () => { const previous = row[key];
+        field.addEventListener("change", () => { const previous = row[key], previousSweep = row.sweep;
           try {
             const time = parseLineTime(field.value);
             if (key === "start") {
@@ -1294,13 +1391,15 @@
             }
             else {
               row.end = time === null ? null : Number((time - project.offset).toFixed(3));
+              if (row.sweep && (row.end === null || row.sweep.at(-1).end > row.end)) delete row.sweep;
               C.validate(project);
             }
             updateTimingFields(); renderRows(); save();
           }
-          catch (error) { row[key] = previous; renderRows(); fail(error); } });
+          catch (error) { row[key] = previous; if (previousSweep) row.sweep = previousSweep; renderRows(); fail(error); } });
       }
-      const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; delete row.furigana; furiganaEditor?.remove(); save(); });
+      const text = input("Original lyrics", box, row.text, "textarea"); text.addEventListener("input", () => { row.text = text.value; delete row.furigana; delete row.sweep; furiganaEditor?.remove(); const previousSweepEditor = box.querySelector(".sweep-editor"); const replacement = renderSweepEditor(box, row); previousSweepEditor?.replaceWith(replacement); save(); });
+      renderSweepEditor(box, row);
       let furiganaEditor;
       if (row.furigana) {
         furiganaEditor = el("details", null, box, { class: "furigana-editor" });
@@ -1348,45 +1447,96 @@
   const overlayHost = document.createElement("div");
   overlayHost.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:60";
   const overlayRoot = overlayHost.attachShadow({ mode: "open" }); overlayRoot.append(style.cloneNode(true));
+  // Apply transparency once to the combined opaque caption backgrounds.
+  const captionBackground = el("div", null, overlayRoot, { style: "position:absolute;inset:0;opacity:.85;pointer-events:none" });
+  const originalBackground = el("div", null, captionBackground);
+  const translatedBackground = el("div", null, captionBackground);
+  for (const box of [originalBackground, translatedBackground]) box.style.cssText = "position:absolute;background:#07111b;border-radius:10px";
   const overlay = el("div", null, overlayRoot, { id: "overlay" });
   const caption = el("div", null, overlay, { id: "caption" });
   const original = el("div", "", caption, { id: "original" });
   const translationOverlay = el('div', null, overlayRoot, { style: 'position:absolute;left:5%;right:5%;text-align:center;pointer-events:none;text-shadow:0 2px 5px #000,0 0 8px #000' });
-  const translated = el("div", "", translationOverlay, { id: "translated", style: 'display:inline-block;max-width:100%;background:#07111bd9;border-radius:10px;padding:6px 14px' });
+  const translated = el("div", "", translationOverlay, { id: "translated", style: 'display:inline-block;max-width:100%;border-radius:10px;padding:6px 14px' });
   const next = el("div", "", caption, { id: "next" });
+  let sweepGlyphs = [], sweepRow = null;
+  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   function renderOriginal(node, row) {
     node.replaceChildren();
+    const sweeping = node === original && !!row?.sweep;
+    if (node === original) { sweepGlyphs = []; sweepRow = row; }
     if (!row) return;
-    if (!project.furiganaEnabled || !row.furigana) { node.textContent = row.text.trim(); return; }
     const start = row.text.length - row.text.trimStart().length, end = row.text.trimEnd().length;
+    let cursor = start;
+    const append = (parent, text) => {
+      if (!sweeping) { parent.append(document.createTextNode(text)); return; }
+      for (const { segment } of graphemes.segment(text)) {
+        if (/^\s+$/u.test(segment)) parent.append(document.createTextNode(segment));
+        else {
+          const glyph = el("span", segment, parent, { class: "sweep-glyph" });
+          sweepGlyphs.push({ node: glyph, start: cursor, end: cursor + segment.length });
+        }
+        cursor += segment.length;
+      }
+    };
+    if (!project.furiganaEnabled || !row.furigana) { append(node, row.text.trim()); return; }
     let offset = 0;
     for (const [segment, reading] of row.furigana) {
       const text = segment.slice(Math.max(0, start - offset), Math.max(0, end - offset));
       offset += segment.length;
       if (!text) continue;
-      if (!reading) { node.append(document.createTextNode(text)); continue; }
+      if (!reading) { append(node, text); continue; }
       const aligned = C.alignKana(text, reading);
-      node.append(document.createTextNode(aligned.prefix));
+      append(node, aligned.prefix);
       if (aligned.base && aligned.annotation) {
-        const ruby = el("ruby", aligned.base, node);
+        const ruby = el("ruby", null, node);
+        append(ruby, aligned.base);
         el("rt", aligned.annotation, ruby);
-      } else node.append(document.createTextNode(aligned.base));
-      node.append(document.createTextNode(aligned.suffix));
+      } else append(node, aligned.base);
+      append(node, aligned.suffix);
     }
   }
+  function paintSweep() {
+    const media = video();
+    if (!overlay.hidden && sweepRow?.sweep && media && project) {
+      const position = C.sweepPosition(sweepRow, media.currentTime, project.offset);
+      for (const glyph of sweepGlyphs) {
+        const fill = Math.max(0, Math.min(1, (position - glyph.start) / (glyph.end - glyph.start)));
+        if (fill !== glyph.fill) { glyph.node.style.setProperty("--sweep", `${fill * 100}%`); glyph.fill = fill; }
+      }
+    }
+    requestAnimationFrame(paintSweep);
+  }
   function separateCaptions() {
-    // Measure the preferred positions afresh after text, ruby or viewport changes.
     overlay.style.transform = "";
     translationOverlay.style.transform = "";
     if (overlay.hidden || translationOverlay.hidden) return;
-    const originalBounds = caption.getBoundingClientRect();
-    const translationBounds = translated.getBoundingClientRect();
+    // Measure text rather than padded backgrounds, including ruby and next-line text.
+    const bounds = nodes => {
+      const rects = nodes.filter(node => !node.hidden && node.textContent).map(node => {
+        const range = document.createRange(); range.selectNodeContents(node);
+        return range.getBoundingClientRect();
+      }).filter(rect => rect.height > 0);
+      return rects.length ? { top: Math.min(...rects.map(rect => rect.top)), bottom: Math.max(...rects.map(rect => rect.bottom)) } : null;
+    };
+    const originalBounds = bounds([original, next]), translationBounds = bounds([translated]);
+    if (!originalBounds || !translationBounds) return;
     const originalAbove = Number(position.value) >= Number(translationPosition.value);
     const upper = originalAbove ? originalBounds : translationBounds;
     const lower = originalAbove ? translationBounds : originalBounds;
-    const overlap = upper.bottom + 8 - lower.top;
-    if (overlap > 0) {
-      (originalAbove ? overlay : translationOverlay).style.transform = `translateY(-${Math.ceil(overlap)}px)`;
+    const gap = overlayHost.getBoundingClientRect().height * Math.max(0, Math.min(30, Number(captionGap.value) || 0)) / 100;
+    const shift = lower.top - upper.bottom - gap;
+    if (shift) (originalAbove ? overlay : translationOverlay).style.transform = `translateY(${shift}px)`;
+  }
+  function updateCaptionBackground() {
+    const hostBounds = overlayHost.getBoundingClientRect();
+    for (const [box, text, container] of [[originalBackground, caption, overlay], [translatedBackground, translated, translationOverlay]]) {
+      box.hidden = container.hidden || text.hidden;
+      if (box.hidden) continue;
+      const rect = text.getBoundingClientRect();
+      box.style.left = `${rect.left - hostBounds.left}px`;
+      box.style.top = `${rect.top - hostBounds.top}px`;
+      box.style.width = `${rect.width}px`;
+      box.style.height = `${rect.height}px`;
     }
   }
   let lastCaption = "";
@@ -1461,14 +1611,17 @@
     overlay.hidden = hidden || !showOriginal.checked;
     translationOverlay.hidden = hidden || !showTranslation.checked || !active?.translations[project?.translationLanguage];
     translationOverlay.style.bottom = `${translationPosition.value}%`;
+    translated.style.color = translationColor.value;
+    overlay.style.setProperty("--lyrics-color", lyricsColor.value);
     translated.style.fontSize = `${translationSize.value}px`;
+    overlay.style.setProperty("--sweep-color", sweepColor.value);
     overlay.style.fontSize = `${fontSize.value}px`;
     overlay.style.bottom = `${position.value}%`;
     const nextRow = active && showNext.checked ? project.blocks.filter(row => row.start !== null && row.start > active.start && row.text.trim()).sort((a, b) => a.start - b.start)[0] : null;
     const values = [active?.text || "", active?.translations[project?.translationLanguage] || "", nextRow?.text || ""].map(text => text.trim());
-    const signature = JSON.stringify([values, project?.furiganaEnabled, active?.furigana, nextRow?.furigana]);
+    const signature = JSON.stringify([values, active?.id, active?.sweep, project?.furiganaEnabled, active?.furigana, nextRow?.furigana]);
     if (signature !== lastCaption) { renderOriginal(original, active); translated.textContent = values[1]; renderOriginal(next, nextRow); translated.hidden = !values[1]; next.hidden = !values[2]; lastCaption = signature; }
-    separateCaptions();
+    separateCaptions(); updateCaptionBackground();
     if (!panel.hidden) clock.textContent = `Video: ${(media?.currentTime || 0).toFixed(2)}s · ${project?.blocks.length || 0} lines`;
   }
   document.body.append(host);
@@ -1484,6 +1637,7 @@
       const token = generation;
       await saveQueue;
       if (token !== generation) throw new Error('Video changed.');
+      if (hasPendingSweepEdits()) throw new Error('Apply or reset the pending progressive highlighting edits before using MCP.');
       if (root.activeElement && pendingMcpInputs.has(root.activeElement)) throw new Error('Finish editing the active field before using MCP.');
       if (message.type === 'mcp-snapshot') {
         return { project: C.exportProject(C.singleTranslation(project)), revision: storageState.revision, duration: video()?.duration ?? null };
@@ -1503,6 +1657,7 @@
     })();
   });
   tick(); setInterval(tick, 100);
+  requestAnimationFrame(paintSweep);
   globalThis.KaraokeUI = type => {
     if (type === "toggle-enabled") return setEnabled(!enabled);
     if (type === "toggle-editor") return setEditorOpen(panel.hidden);

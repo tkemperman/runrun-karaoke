@@ -20,7 +20,14 @@
         }
       }
       const state = saved[metaKey] || { revision: 0, dirty: !!project, blocked: false };
-      return { project, ...state, dirty: state.dirty || !!(project && state.baseline && core.fingerprint(project) !== state.baseline) };
+      // Compare migrated snapshots in the same schema, so new defaults do not
+      // misclassify an unchanged catalog project as a user edit.
+      let baseline = state.baseline;
+      if (baseline) {
+        try { baseline = core.fingerprint(JSON.parse(baseline)); }
+        catch (_) { /* Unverifiable baselines remain protected as local work. */ }
+      }
+      return { project, ...state, ...(baseline ? { baseline } : {}), dirty: state.dirty || !!(project && baseline && core.fingerprint(project) !== baseline) };
     }
     async function write(videoId, value, expectedRevision, options = {}) {
       return serial(videoId, async () => {

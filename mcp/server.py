@@ -29,16 +29,21 @@ TOOLS = []
 def tool(name, description, properties=None, required=None, read_only=False, destructive=False):
     TOOLS.append({'name': name, 'description': description,
                   'inputSchema': {'type': 'object', 'properties': properties or {}, 'required': required or [], 'additionalProperties': False},
-                  'annotations': {'readOnlyHint': read_only, 'destructiveHint': destructive, 'openWorldHint': name in ('prepare_audio', 'search_lyrics', 'prepare_publication', 'publish_lyrics')}})
+                  'annotations': {'readOnlyHint': read_only, 'destructiveHint': destructive, 'openWorldHint': name in ('start_translation', 'prepare_audio', 'search_lyrics', 'prepare_publication', 'publish_lyrics')}})
 
 
+tool('check_dependencies', 'Check local audio prerequisites without installing anything. Returns missing programs and verified distro installation instructions when needed. Run when invoking add-sweep before audio work.', read_only=True)
 tool('list_videos', 'List open YouTube videos and durations from the connected Firefox extension.', read_only=True)
 tool('get_project', 'Read saved lyrics, translations, target language, revision and live duration. Check hasLyrics before choosing correction or generation.', {'videoId': ID}, ['videoId'], True)
+tool('start_translation', 'Start a paid OpenAI translation only when the user requests or authorizes it. Uses the saved API key/model and project target language; options default to saved preferences. Returns immediately; poll translation_status. Does not modify lyrics. Repeated calls while running reuse the existing job.', {'videoId': ID, 'includeFurigana': {'type': 'boolean'}, 'convertRomaji': {'type': 'boolean'}}, ['videoId'])
+tool('translation_status', 'Read AI translation progress, validation errors or the completed proposed project. No new API request. Stage the completed project with stage_lyrics to review/apply it. Jobs are lost when the extension reloads.', {'videoId': ID, 'jobId': REVIEW}, ['videoId', 'jobId'], True)
 tool('prepare_audio', 'Start/reuse full-video audio download and extraction, reusing the AudioShake cache. No paid API. Poll audio_status; does not change lyrics.', {'videoId': ID, 'duration': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 2700}}, ['videoId', 'duration'])
 tool('audio_status', 'Read progress of audio preparation, including the cached file path when ready.', {'videoId': ID}, ['videoId'], True)
 tool('listen_audio', 'Return an actual WAV audio content block for listening. Times are video seconds, not project-relative seconds. Listen across the complete track, including gaps; never infer performed lyrics solely from LRCLIB.', {'videoId': ID, 'start': {'type': 'number', 'minimum': 0}, 'seconds': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 30, 'default': 20}}, ['videoId', 'start'], True)
 tool('search_lyrics', 'Search LRCLIB for the original song text as reference. A live recording may differ; audio is authoritative.', {'query': {'type': 'string', 'minLength': 1, 'maxLength': 500}}, ['query'], True)
 tool('stage_lyrics', 'Save a proposal and return its review table; DOES NOT edit the extension. Pass the complete project with stable existing IDs, new IDs for missing lines, translations in its target language, and Japanese furigana. Show the table and wait for user approval before apply_lyrics.', {'videoId': ID, 'expectedRevision': {'type': 'integer', 'minimum': 0}, 'project': {'type': 'object'}, 'notes': {'type': 'string', 'maxLength': 20000}}, ['videoId', 'expectedRevision', 'project'])
+tool('stage_sweep', 'Stage progressive highlighting without changing Firefox. Supply the complete project; each sung block has sweep: [{text,start,end}], in project seconds (video seconds minus offset), ordered without overlap, inside block start/end, concatenating exactly to block.text. Reuse correct lyrics, translations, IDs, ruby and sweep. Correct or create lyrics plus target-language translations when missing or wrong; explain corrections in notes. Preserve settings. An identical proposal returns status unchanged without a review or write. Reuse prepare_audio/listen_audio for evidence. Returns a reviewId for apply_sweep.', {'videoId': ID, 'expectedRevision': {'type': 'integer', 'minimum': 0}, 'project': {'type': 'object'}, 'notes': {'type': 'string', 'maxLength': 20000}}, ['videoId', 'expectedRevision', 'project'])
+tool('apply_sweep', 'Apply an exact stage_sweep proposal when adding progressive highlighting is authorized. Rejects stale revisions, retains before/after recovery JSON and refreshes open editors. Does not publish or delete audio.', {'reviewId': REVIEW}, ['reviewId'])
 tool('get_review', 'Recover a staged review and its exact old/new text and translation table.', {'reviewId': REVIEW}, ['reviewId'], True)
 tool('apply_lyrics', 'Apply the exact staged proposal locally ONLY after the user approves the shown table. Preserves a backup, rejects stale reviews, and updates open editors. Does not publish.', {'reviewId': REVIEW}, ['reviewId'])
 tool('prepare_publication', 'Read the exact GitHub repository, branch, files and revision for applied lyrics. Show these to the user and ask permission to publish. Does not publish.', {'reviewId': REVIEW}, ['reviewId'], True)
@@ -125,7 +130,7 @@ def difference(before, after):
             rows.append(entry(previous, row))
     rows += [entry(row, None) for row in before['blocks'] if row['id'] not in new]
     rows.sort(key=lambda row: (row['start'] is None, row['start'] or 0))
-    def cell(row, language):
+    def cell(row, language, offset):
         if not row:
             return '—'
         def escape(value):
@@ -133,13 +138,15 @@ def difference(before, after):
         result = escape(row['text']) + '<br><em>' + escape(row['translations'].get(language, '')) + '</em>'
         if row.get('furigana'):
             result += '<br>Ruby: ' + escape(' · '.join(f'{text} → {reading}' for text, reading in row['furigana'] if reading))
+        if row.get('sweep'):
+            result += '<br>Sweep: ' + escape(' · '.join(f"{part['text']} [{timestamp(part['start'] + offset)}–{timestamp(part['end'] + offset)}]" for part in row['sweep']))
         return result
     table = ['| Timestamp | Oorspronkelijke tekst + vertaling | Nieuwe tekst + vertaling |', '|---|---|---|']
     for row in rows:
         time = timestamp(row['start']) + ('–' + timestamp(row['end']) if row['end'] is not None else '')
         if row['kind'] == 'changed' and (row['oldStart'], row['oldEnd']) != (row['start'], row['end']):
             time = timestamp(row['oldStart']) + ('–' + timestamp(row['oldEnd']) if row['oldEnd'] is not None else '') + ' → ' + time
-        table.append(f"| {time} | {cell(row['original'], before['translationLanguage'])} | {cell(row['proposed'], after['translationLanguage'])} |")
+        table.append(f"| {time} | {cell(row['original'], before['translationLanguage'], before['offset'])} | {cell(row['proposed'], after['translationLanguage'], after['offset'])} |")
     return rows, '\n'.join(table)
 
 
@@ -180,10 +187,29 @@ class Server:
         if not isinstance(args, dict) or set(args) - set(schema['properties']) or set(schema['required']) - set(args):
             raise ValueError('Invalid tool arguments.')
         identifier = video_id(args['videoId']) if 'videoId' in args else None
+        if name == 'check_dependencies':
+            result = helper.status()
+            result['missing'] = [name for name, info in result['dependencies'].items() if not info['available']]
+            result['installationInstructions'] = None
+            if not result['ready']:
+                installer = Path(__file__).resolve().parents[1] / 'native/install.sh'
+                try:
+                    checked = subprocess.run(['sh', str(installer), '--check'], capture_output=True, text=True, timeout=25)
+                    result['installationInstructions'] = checked.stdout.strip() or 'See native/README.md for Python 3.10+, FFmpeg/ffprobe, yt-dlp and Deno installation.'
+                except (OSError, subprocess.TimeoutExpired):
+                    result['installationInstructions'] = 'See native/README.md for Python 3.10+, FFmpeg/ffprobe, yt-dlp and Deno installation; package availability could not be checked.'
+            return result
         if name == 'list_videos':
             return self.call('list')
         if name == 'get_project':
             return self.call('read', videoId=identifier)
+        if name == 'start_translation':
+            options = {key: args[key] for key in ('includeFurigana', 'convertRomaji') if key in args}
+            if any(type(value) is not bool for value in options.values()):
+                raise ValueError('Translation options must be boolean.')
+            return self.call('start-translation', videoId=identifier, **options)
+        if name == 'translation_status':
+            return self.call('translation-status', videoId=identifier, jobId=review_id(args['jobId']))
         if name == 'prepare_audio':
             duration = numeric(args['duration'], 0.001, 2700)
             if self.jobs.get(identifier, {}).get('status') == 'running':
@@ -219,7 +245,7 @@ class Server:
             if len(raw) > 2_000_000:
                 raise ValueError('LRCLIB response too large.')
             return {'url': url, 'results': json.loads(raw)[:10], 'note': 'Reference lyrics only; live audio may differ.'}
-        if name == 'stage_lyrics':
+        if name in ('stage_lyrics', 'stage_sweep'):
             state = self.call('read', videoId=identifier)
             revision = args['expectedRevision']
             if type(revision) is not int or revision != state['revision']:
@@ -240,24 +266,50 @@ class Server:
                 needs_translation = old is None or old['text'] != row['text'] or old['translations'].get(language, '').strip()
                 if row['text'].strip() and needs_translation and not row['translations'].get(language, '').strip():
                     raise ValueError('Include a target-language translation for each new/corrected lyric and preserve existing translations.')
+            if name == 'stage_sweep':
+                before = state['project']
+                for field in ('title', 'artist', 'offset', 'furiganaEnabled'):
+                    if proposed[field] != before[field]:
+                        raise ValueError(f'Preserve {field} when adding sweep.')
+                sung = [row for row in proposed['blocks'] if row['text'].strip()]
+                if not sung or not any(row.get('sweep') for row in sung):
+                    raise ValueError('Include sweep segments for at least one sung line.')
+                duration = state.get('duration')
+                for row in sung:
+                    if not row.get('sweep'):
+                        continue
+                    if row['start'] + proposed['offset'] < 0 or (duration is not None and row['end'] + proposed['offset'] > duration + 0.05):
+                        raise ValueError('Sweep timing falls outside the video.')
             rows, table = difference(state['project'], proposed)
             notes = args.get('notes', '')
             if not isinstance(notes, str) or len(notes) > 20000:
                 raise ValueError('Invalid review notes.')
+            if name == 'stage_sweep' and proposed == state['project']:
+                return {'status': 'unchanged', 'videoId': identifier, 'revision': revision, 'rows': [], 'table': table}
             review = {'reviewId': str(uuid.uuid4()), 'videoId': identifier, 'revision': revision, 'before': state['project'],
-                      'after': proposed, 'rows': rows, 'table': table, 'notes': notes, 'status': 'staged',
+                      'after': proposed, 'rows': rows, 'table': table, 'notes': notes, 'status': 'staged', 'kind': 'sweep' if name == 'stage_sweep' else 'lyrics',
                       'metadataChanges': {key: {'before': state['project'][key], 'after': proposed[key]} for key in ('title', 'artist', 'originalLanguage', 'offset', 'furiganaEnabled') if state['project'][key] != proposed[key]}}
             old_ids = [row['id'] for row in state['project']['blocks']]
             new_ids = [row['id'] for row in proposed['blocks']]
             shared = set(old_ids) & set(new_ids)
             if [key for key in old_ids if key in shared] != [key for key in new_ids if key in shared]:
                 review['metadataChanges']['lineOrder'] = {'before': old_ids, 'after': new_ids}
+            if name == 'stage_sweep':
+                review['coverage'] = {'sungLines': len(sung), 'sweptLines': sum(bool(row.get('sweep')) for row in sung),
+                                      'unsweptIds': [row['id'] for row in sung if not row.get('sweep')]}
             self.save(review)
             return review
         review = self.load(args['reviewId'])
         if name == 'get_review':
             return review
-        if name == 'apply_lyrics':
+        if name in ('apply_lyrics', 'apply_sweep'):
+            if (review.get('kind', 'lyrics') == 'sweep') != (name == 'apply_sweep'):
+                raise ValueError('Use the apply tool matching the staged proposal kind.')
+            if name == 'apply_sweep' and review['status'] == 'applied':
+                state = self.call('read', videoId=review['videoId'])
+                if state['project'] != review['after'] or state['revision'] != review['appliedRevision']:
+                    raise ValueError('Project changed after applying sweep. Read it again.')
+                return {'status': 'unchanged', 'reviewId': review['reviewId'], 'revision': state['revision'], 'backup': str(self.root / (review['reviewId'] + '.json'))}
             if review['status'] != 'staged':
                 raise ValueError('This proposal was already applied. Read the current project before another change.')
             saved = self.call('apply', project=review['after'], revision=review['revision'])

@@ -39,7 +39,8 @@
       }
       const match = !optional && candidates.length === 1 ? timed[candidates[0]] : null;
       if (!match) unmatched.push(i + 1);
-      return { ...row, start: match?.start ?? null, end: match?.end ?? null };
+      const { sweep, ...untimed } = row;
+      return { ...untimed, start: match?.start ?? null, end: match?.end ?? null };
     });
     return { blocks: result, unmatched };
   }

@@ -113,6 +113,74 @@ class ReviewTests(unittest.TestCase):
         rows, table = mcp.difference(before, after)
         self.assertEqual(rows[0]['kind'], 'removed'); self.assertIn('| — |', table)
 
+    def sweep(self):
+        proposal = copy.deepcopy(self.state['project'])
+        proposal['blocks'][0]['sweep'] = [{'text': '海', 'start': 2, 'end': 3}]
+        return self.server.handle('stage_sweep', {'videoId': proposal['videoId'], 'expectedRevision': self.state['revision'], 'project': proposal})
+
+    def test_sweep_stage_apply_backup_and_stale_protection(self):
+        review = self.sweep()
+        self.assertNotIn('apply', self.calls)
+        self.assertIn('Sweep: 海 [0:03.000–0:04.000]', review['table'])
+        with self.assertRaisesRegex(ValueError, 'matching'):
+            self.server.handle('apply_lyrics', {'reviewId': review['reviewId']})
+        self.state['revision'] += 1
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+        self.state['revision'] -= 1
+        applied = self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+        self.assertEqual(self.state['project']['blocks'][0]['sweep'], review['after']['blocks'][0]['sweep'])
+        self.assertEqual(json.loads(Path(applied['backup']).read_text())['before'], review['before'])
+        self.assertEqual(self.server.handle('apply_sweep', {'reviewId': review['reviewId']})['status'], 'unchanged')
+        self.state['revision'] += 1
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+
+    def test_sweep_creates_subtitles_and_translation_when_none_exist(self):
+        self.state['project']['blocks'] = []
+        proposed = copy.deepcopy(self.state['project'])
+        proposed['blocks'] = [{'id': 'new', 'text': '海', 'start': 2, 'end': 3,
+                               'translations': {'en': 'Sea'}, 'sweep': [{'text': '海', 'start': 2, 'end': 3}]}]
+        review = self.server.handle('stage_sweep', {'videoId': proposed['videoId'], 'expectedRevision': 4, 'project': proposed})
+        self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+        self.assertEqual(self.state['project']['blocks'][0]['translations']['en'], 'Sea')
+
+    def test_sweep_can_correct_wrong_existing_lyrics_and_translation(self):
+        proposed = self.sweep()['after']
+        proposed['blocks'][0].update(text='空', translations={'en': 'Sky'}, sweep=[{'text': '空', 'start': 2, 'end': 3}])
+        review = self.server.handle('stage_sweep', {'videoId': proposed['videoId'], 'expectedRevision': 4, 'project': proposed, 'notes': 'Corrected words to match recording.'})
+        self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+        self.assertEqual(self.state['project']['blocks'][0]['text'], '空')
+
+    def test_identical_sweep_is_a_noop_without_writes_or_reviews(self):
+        review = self.sweep()
+        self.server.handle('apply_sweep', {'reviewId': review['reviewId']})
+        files = list(Path(self.temp.name).iterdir())
+        applies = self.calls.count('apply')
+        for _ in range(2):
+            result = self.server.handle('stage_sweep', {'videoId': self.state['project']['videoId'], 'expectedRevision': 5, 'project': copy.deepcopy(self.state['project'])})
+            self.assertEqual(result['status'], 'unchanged')
+            self.assertNotIn('reviewId', result)
+        self.assertEqual(self.state['revision'], 5)
+        self.assertEqual(self.calls.count('apply'), applies)
+        self.assertEqual(list(Path(self.temp.name).iterdir()), files)
+
+    def test_sweep_requires_translation_coverage_and_times_within_video(self):
+        for change in ('translation', 'offset', 'missing', 'duration'):
+            proposed = self.sweep()['after']
+            if change == 'translation': proposed['blocks'][0]['translations'] = {}
+            if change == 'offset': proposed['offset'] = 0
+            if change == 'missing': del proposed['blocks'][0]['sweep']
+            if change == 'duration': self.state['duration'] = 3
+            with self.assertRaises(ValueError):
+                self.server.handle('stage_sweep', {'videoId': proposed['videoId'], 'expectedRevision': 4, 'project': proposed})
+
+    def test_partial_sweep_reports_unswept_lines_without_inventing_timing(self):
+        proposed = self.sweep()['after']
+        proposed['blocks'].append({'id': 'uncertain', 'text': '声', 'start': 4, 'end': 5, 'translations': {'en': 'Voice'}})
+        review = self.server.handle('stage_sweep', {'videoId': proposed['videoId'], 'expectedRevision': 4, 'project': proposed})
+        self.assertEqual(review['coverage'], {'sungLines': 2, 'sweptLines': 1, 'unsweptIds': ['uncertain']})
+
     def test_audio_cache_reused_without_downloading_or_paid_calls(self):
         audio = Path(self.temp.name) / 'cached.mp3'; audio.write_bytes(b'fixture')
         class Worker:
@@ -126,6 +194,51 @@ class ReviewTests(unittest.TestCase):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_dependency_check_returns_installation_guidance_only_when_missing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            server = mcp.Server(Path(temporary))
+            try:
+                for ready in (True, False):
+                    status = {'ready': ready, 'dependencies': {'FFmpeg': {'available': ready}}}
+                    with patch.object(mcp.helper, 'status', return_value=status), patch.object(mcp.subprocess, 'run', return_value=type('Result', (), {'stdout': 'Verified install command'})()) as command:
+                        result = server.handle('check_dependencies', {})
+                    self.assertEqual(result['missing'], [] if ready else ['FFmpeg'])
+                    if ready:
+                        command.assert_not_called()
+                        self.assertIsNone(result['installationInstructions'])
+                    else:
+                        self.assertEqual(result['installationInstructions'], 'Verified install command')
+                        self.assertEqual(command.call_args.args[0][-1], '--check')
+            finally:
+                server.pool.shutdown()
+
+    def test_translation_tools_forward_validated_arguments_without_credentials(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as temporary:
+            server = mcp.Server(Path(temporary), lambda operation, **args: calls.append((operation, args)) or {'status': 'running'})
+            try:
+                server.handle('start_translation', {'videoId': 'abcdefghijk', 'includeFurigana': False})
+                job_id = str(mcp.uuid.uuid4())
+                server.handle('translation_status', {'videoId': 'abcdefghijk', 'jobId': job_id})
+                self.assertEqual(calls, [('start-translation', {'videoId': 'abcdefghijk', 'includeFurigana': False}), ('translation-status', {'videoId': 'abcdefghijk', 'jobId': job_id})])
+                for args in ({'videoId': 'abcdefghijk', 'convertRomaji': 1}, {'videoId': 'abcdefghijk', 'apiKey': 'secret'}):
+                    with self.assertRaises(ValueError):
+                        server.handle('start_translation', args)
+                self.assertEqual(len(calls), 2)
+            finally:
+                server.pool.shutdown()
+
+    def test_bridge_directory_matches_desktop_without_xdg_environment(self):
+        import os
+        import bridge
+        runtime = Path(f'/run/user/{os.getuid()}')
+        if not runtime.is_dir():
+            self.skipTest('Linux user runtime directory unavailable')
+        with patch.dict(os.environ, {'XDG_RUNTIME_DIR': str(runtime)}):
+            desktop = bridge.directory()
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(bridge.directory(), desktop)
+
     def test_installer_replaces_symlinks_without_overwriting_targets(self):
         import os
         with tempfile.TemporaryDirectory() as temporary:

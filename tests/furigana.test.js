@@ -22,7 +22,7 @@ test('legacy schema migration is non-mutating and idempotent', () => {
   p.blocks.push(C.block('日本語', 0, 3));
   const migrated = C.validate(p);
   assert.equal(p.schemaVersion, 1); assert.equal(p.furiganaEnabled, undefined);
-  assert.equal(migrated.schemaVersion, 4); assert.equal(migrated.furiganaEnabled, false);
+  assert.equal(migrated.schemaVersion, 5); assert.equal(migrated.furiganaEnabled, false);
   assert.deepEqual(C.validate(migrated), migrated);
 });
 

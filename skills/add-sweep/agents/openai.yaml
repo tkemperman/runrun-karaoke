@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add sweep"
+  short_description: "Add progressive karaoke highlighting from audio"
+  default_prompt: "Use $add-sweep to add progressive highlighting to this video, creating timed subtitles if they are missing."

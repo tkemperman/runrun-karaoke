@@ -258,7 +258,13 @@ const mcp = KaraokeMCP.create({
   core: KaraokeCore, store: projectStore, tabs: browser.tabs,
   settings: async () => {
     const saved = (await browser.storage.local.get('translationSettings')).translationSettings || {};
-    return { language: saved.language || 'en' };
+    return { language: saved.language || 'en', model: saved.model || 'gpt-6-astra',
+      includeFurigana: saved.includeFurigana !== false, convertRomaji: saved.convertRomaji !== false };
+  },
+  translate: async options => {
+    const saved = (await browser.storage.local.get('translationSettings')).translationSettings || {};
+    return KaraokeTranslation.translate({ ...options, apiKey: saved.apiKey,
+      onUsage: response => KaraokeUsage.recordOpenAI(response, options.model) });
   },
   repository: {
     preferences: async () => {

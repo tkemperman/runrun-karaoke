@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
   const models = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"];
-  const readingInstructions = "Every segment containing kanji must have a non-empty kana reading. Never use a null reading for a segment containing even one kanji, including mixed kana/kanji phrases or entire lines. Use null only for segments without kanji. Separate punctuation and whitespace from readings. For example, 海へ becomes [{\"text\":\"海\",\"reading\":\"うみ\"},{\"text\":\"へ\",\"reading\":null}]. Check every line for missing kanji readings before returning. ";
+  const readingInstructions = "Every segment containing kanji must have a non-empty kana reading. Never use a null reading for a segment containing even one kanji, including mixed kana/kanji phrases or entire lines. Use null only for segments without kanji. Separate punctuation and whitespace from readings. Never create empty text segments; an empty line must have segments: []. For example, 海へ becomes [{\"text\":\"海\",\"reading\":\"うみ\"},{\"text\":\"へ\",\"reading\":null}]. Check every line for missing kanji readings before returning. ";
   function validateLines(lines) {
     if (!Array.isArray(lines) || !lines.length || lines.length > 5000) throw new Error("Provide between 1 and 5000 lyrics lines.");
     const ids = new Set();
@@ -95,17 +95,21 @@
       throw error;
     } finally { clearTimeout(timeout); }
   }
+  // Explicit ranges for the same kana scripts as the local validator. Provider regex
+  // engines need not support JavaScript's Unicode property escapes.
+  const kanaCharacters = 'ぁ-ゖゝ-ゟァ-ヿㇰ-ㇿ㋐-㋾㌀-㍗ｦ-ｯｱ-ﾝ𚿰-𚿳𚿵-𚿻𚿽-𚿾𛀀-𛄢𛄲𛅐-𛅒𛅕𛅤-𛅧🈀';
   const furiganaFormat = { type: "json_schema", name: "lyrics_furigana", strict: true, schema: {
     type: "object", additionalProperties: false, required: ["lines"], properties: {
       lines: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "segments"], properties: {
         id: { type: "string" }, segments: { type: "array", items: { anyOf: [
           { type: "object", additionalProperties: false, required: ["text", "reading"], properties: {
-            text: { type: "string" }, reading: { type: "string", pattern: "\\S" }
+            text: { type: "string", minLength: 1 }, reading: { type: "string", maxLength: 1000,
+              pattern: `^[${kanaCharacters}\\s]*[${kanaCharacters}][${kanaCharacters}\\s]*$` }
           } },
           { type: "object", additionalProperties: false, required: ["text", "reading"], properties: {
             // Explicit CJK ranges avoid provider-specific Unicode property syntax.
             // Local validation still checks all Han characters and exact reconstruction.
-            text: { type: "string", pattern: "^[^㐀-䶿一-鿿豈-﫿𠀀-𲎯丽-𯨟々〇〡-〩〸-〻]*$" }, reading: { type: "null" }
+            text: { type: "string", minLength: 1, pattern: "^[^㐀-䶿一-鿿豈-﫿𠀀-𲎯丽-𯨟々〇〡-〩〸-〻]*$" }, reading: { type: "null" }
           } }
         ] } }
       } } }
@@ -132,12 +136,21 @@
     catch (_) { throw new Error("OpenAI returned invalid furigana JSON."); }
     if (!Array.isArray(result?.lines) || result.lines.length !== lines.length) throw new Error("OpenAI returned an incorrect number of furigana lines.");
     const expected = new Map(lines.map(line => [line.id, line.text])), byId = new Map(), missingReadings = new Set();
+    const numbers = new Map(lines.map((line, index) => [line.id, index + 1]));
     const core = root.KaraokeCore || require("./core.js");
     for (const line of result.lines) {
       if (!line || !expected.has(line.id) || byId.has(line.id) || !Array.isArray(line.segments)) throw new Error("OpenAI returned invalid or duplicate furigana IDs.");
       const parts = line.segments.map(part => [part?.text, part?.reading]);
-      core.validateFurigana(expected.get(line.id), parts);
-      if (parts.some(([, reading]) => reading !== null && !/^[\p{Script=Hiragana}\p{Script=Katakana}ー・\s]+$/u.test(reading))) throw new Error("OpenAI returned non-kana furigana readings.");
+      try {
+        if (parts.some(([text]) => typeof text !== 'string' || !text)) throw new Error('empty or invalid text segment');
+        if (parts.map(([text]) => text).join('') !== expected.get(line.id)) throw new Error('segments do not exactly match the lyrics');
+        if (parts.some(([, reading]) => reading !== null && (typeof reading !== 'string' || !/^[\p{Script=Hiragana}\p{Script=Katakana}ー・\s]+$/u.test(reading)))) throw new Error('non-kana furigana reading');
+        core.validateFurigana(expected.get(line.id), parts);
+      } catch (cause) {
+        const error = new Error(`OpenAI returned invalid furigana on line ${numbers.get(line.id)}: ${cause.message}. Nothing was changed. Try again, or turn off Generate furigana to translate without readings.`);
+        error.furiganaDetails = { line: numbers.get(line.id), text: expected.get(line.id), segments: line.segments };
+        throw error;
+      }
       if (parts.some(([text, reading]) => /[\p{Script=Han}]/u.test(text) && !reading?.trim())) missingReadings.add(line.id);
       byId.set(line.id, parts);
     }
